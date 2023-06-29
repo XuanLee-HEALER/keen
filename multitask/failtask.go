@@ -117,7 +117,7 @@ func NewFailTasks[F TaskFn](f ...Task[F]) *FailTasks[F, interface{}] {
 }
 
 func NewReFailTasks[F TaskFn, R TaskRevokeFn](r R, f ...Task[F]) *FailTasks[F, R] {
-	in := make([]chan bool, len(f))
+	in := make([]chan bool, 0)
 	out := make(chan any, len(f))
 	return &FailTasks[F, R]{
 		taskList: f,
@@ -175,33 +175,44 @@ func (t *FailTasks[F, R]) RunRe() {
 	}
 
 	isRe := false
+	counter := 0
 	for tv := range tout {
-		if isRe {
-			break
-		}
+		counter++
 		if common.IsErr(tv) {
-			for _, ch := range t.in {
-				ch <- false
-			}
-			counter := 0
-			for err := range trout {
-				counter++
-				trcache = append(trcache, err)
-				if counter == taskSize {
-					for _, v := range trcache {
-						t.out <- v
-					}
-					break
+			if !isRe {
+				for _, ch := range t.in {
+					ch <- false
+					close(ch)
 				}
+				isRe = true
+				break
 			}
-			isRe = true
 		} else {
 			cache = append(cache, tv)
+			if counter == taskSize {
+				for _, ch := range t.in {
+					ch <- true
+					close(ch)
+				}
+				break
+			}
 		}
 	}
 
 	if !isRe {
 		for _, v := range cache {
+			t.out <- v
+		}
+	} else {
+		counter := 0
+		for err := range trout {
+			counter++
+			trcache = append(trcache, err)
+			if counter == taskSize {
+				break
+			}
+		}
+		for _, v := range trcache {
 			t.out <- v
 		}
 	}

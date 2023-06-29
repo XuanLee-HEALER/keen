@@ -145,10 +145,11 @@ func TestTasks(t *testing.T) {
 
 func TestReTasks(t *testing.T) {
 	wf := func(args ...any) error {
-		n := rand.Intn(10)
-		if n < 3 {
-			return fmt.Errorf("toy error")
-		}
+		name := args[0].(string)
+		// n := rand.Intn(10)
+		// if n < 3 {
+		// 	return fmt.Errorf("toy error")
+		// }
 		f, err := os.Create(args[0].(string))
 		if err != nil {
 			return err
@@ -159,7 +160,8 @@ func TestReTasks(t *testing.T) {
 		return nil
 	}
 
-	re := func(name string) error {
+	re := func(args ...any) error {
+		name := args[0].(string)
 		return os.Remove(name)
 	}
 
@@ -169,5 +171,17 @@ func TestReTasks(t *testing.T) {
 	}
 
 	taskList := multitask.TaskList[multitask.FnParam](wf, args)
-	multitask.NewReFailTasks[multitask.FnParam, multitask.FnRevokeParam](re, wf)
+	fail := multitask.NewReFailTasks[multitask.FnParam, multitask.FnRevokeParam](re, taskList...)
+
+	go fail.RunRe()
+
+	ch := fail.Out()
+	counter := 0
+	for range ch {
+		counter++
+	}
+
+	if counter != 10 {
+		t.FailNow()
+	}
 }
