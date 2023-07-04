@@ -16,7 +16,7 @@ type CopyError struct {
 func RCopy(dst []*os.File, src []*os.File) CopyError {
 	const (
 		BUFFER_SIZE = 32 * 1024
-		BUFFER_LEN  = 16
+		BUFFER_LEN  = 32
 	)
 
 	var err CopyError
