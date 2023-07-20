@@ -34,6 +34,7 @@ func RCopy(dst []*os.File, src []*os.File) CopyError {
 		defer wg.Done()
 
 		buf := make([]byte, BUFFER_SIZE)
+
 		isErr := false
 	out:
 		for {
@@ -50,7 +51,9 @@ func RCopy(dst []*os.File, src []*os.File) CopyError {
 						errc <- CopyError{"read", src.Name(), err}
 						isErr = true
 					} else {
-						ch <- buf[:n]
+						nbs := make([]byte, n)
+						copy(nbs, buf[:n])
+						ch <- nbs
 					}
 				}
 			}
