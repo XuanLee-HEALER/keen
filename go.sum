@@ -1,3 +1,5 @@
+github.com/cnyjp/fcdmpublic v0.0.5 h1:CG13AdRQDtEJ5cdENV7rVWXINp0GDkKBgkx8KZe725g=
+github.com/cnyjp/fcdmpublic v0.0.5/go.mod h1:+94+pyrti+HFtfhlpWW/imJ3T2/UlPYHz45Lw2yrk8Q=
 github.com/fatih/color v1.15.0 h1:kOqh6YHBtK8aywxGerMG2Eq3H6Qgoqeo13Bk2Mv/nBs=
 github.com/fatih/color v1.15.0/go.mod h1:0h5ZqXfHYED7Bhv2ZJamyIOUej9KtShiJESRwBDUSsw=
 github.com/mattn/go-colorable v0.1.13 h1:fFA4WZxdEF4tXPZVKMLwD8oUnCTTo08duU7wxecdEvA=
