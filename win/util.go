@@ -68,7 +68,14 @@ type ServiceInfo struct {
 	StartName string `json:"StartName"`
 }
 
+// ServicesByFilter 根据过滤条件获取服务信息，返回对象数组
 func ServicesByFilter(cond string, obj *[]ServiceInfo) error {
+	SERVICES_SCRIPT := `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | ConvertTo-Json}`
+	return PSRetrieve(fmt.Sprintf(SERVICES_SCRIPT, cond), &obj)
+}
+
+// ServiceByFilter 根据过滤条件获取服务信息，返回单个对象
+func ServiceByFilter(cond string, obj *ServiceInfo) error {
 	SERVICES_SCRIPT := `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | ConvertTo-Json}`
 	return PSRetrieve(fmt.Sprintf(SERVICES_SCRIPT, cond), &obj)
 }
