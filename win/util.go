@@ -30,6 +30,96 @@ func GrantFullAccess(path, account string) error {
 	return nil
 }
 
+type ComputerInfo struct {
+	WindowsProductName        string               `json:"WindowsProductName"`
+	WindowsInstallationType   string               `json:"WindowsInstallationType"`
+	DNSHostName               string               `json:"CsDNSHostName"`
+	Domain                    string               `json:"CsDomain"`
+	ComputerName              string               `json:"CsName"`
+	NetworkAdapters           []NetworkAdapterInfo `json:"CsNetworkAdapters"`
+	NumberOfLogicalProcessors int                  `json:"CsNumberOfLogicalProcessors"`
+	NumberOfProcessors        int                  `json:"CsNumberOfProcessors"`
+	TotalPhysicalMemory       int64                `json:"CsTotalPhysicalMemory"`
+	Workgroup                 string               `json:"CsWorkgroup"`
+	MultiLanguage             []string             `json:"OsMuiLanguages"`
+	Language                  string               `json:"OsLanguage"`
+	TimeZone                  string               `json:"TimeZone"`
+}
+
+type NetworkAdapterInfo struct {
+	Description      string `json:"Description"`
+	ConnectionID     string `json:"ConnectionID"`
+	DHCPEnabled      bool   `json:"DHCPEnabled"`
+	DHCPServer       string `json:"DHCPServer"`
+	ConnectionStatus int    `json:"ConnectionStatus"`
+	IPAddresses      string `json:"IPAddresses"`
+}
+
+func HostComputerInfo(obj *ComputerInfo) error {
+	COMPUTER_INFO_SCRIPT := `& {chcp 437 > $null; Get-ComputerInfo -Property "WindowsProductName","WindowsInstallationType","CsDNSHostName","CsDomain","CsName","CsNetworkAdapters","CsNumberOfLogicalProcessors","CsNumberOfProcessors","CsTotalPhysicalMemory","CsWorkgroup","OsMuiLanguages","OsLanguage","TimeZone" | ConvertTo-Json}`
+	return PSRetrieve(COMPUTER_INFO_SCRIPT, &obj)
+}
+
+type ServiceInfo struct {
+	ProcessID int    `json:"ProcessId"`
+	Name      string `json:"Name"`
+	State     string `json:"State"`
+	PathName  string `json:"PathName"`
+	StartName string `json:"StartName"`
+}
+
+func ServicesByFilter(cond string, obj *[]ServiceInfo) error {
+	SERVICES_SCRIPT := `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | ConvertTo-Json}`
+	return PSRetrieve(fmt.Sprintf(SERVICES_SCRIPT, cond), &obj)
+}
+
+type ProcessInfo struct {
+	ProcessId       int `json:"ProcessId"`
+	ParentProcessId int `json:"ParentProcessId"`
+}
+
+// ProcessInfoByName 根据进程名称获取进程信息
+func ProcessInfoByName(pname string, obj *ProcessInfo) error {
+	PROCESS_SCRIPT := `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Process -Filter "Name = '%s'" | Select-Object ProcessId,ParentProcessId | ConvertTo-Json}`
+	return PSRetrieve(fmt.Sprintf(PROCESS_SCRIPT, pname), &obj)
+}
+
+// ProcessInfoById 根据进程ID获取进程信息
+func ProcessInfoById(pid uint, obj *ProcessInfo) error {
+	PROCESS_SCRIPT := `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = %d" | Select-Object ProcessId,ParentProcessId | ConvertTo-Json}`
+	return PSRetrieve(fmt.Sprintf(PROCESS_SCRIPT, pid), &obj)
+}
+
+type ProductVersionInfo struct {
+	ProductVersion string `json:"ProductVersion"`
+}
+
+// SQLServerProductId 获取SQL Server进程的产品ID
+func SQLServerProductId(pid uint, obj *ProductVersionInfo) error {
+	PRODUCT_VER_SCRIPT := `& {chcp 437 > $null; Get-Process -Id %d | Select-Object ProductVersion | ConvertTo-Json}`
+	return PSRetrieve(fmt.Sprintf(PRODUCT_VER_SCRIPT, pid), &obj)
+}
+
+type VolumeInfo struct {
+	UniqueId string `json:"UniqueId"`
+}
+
+// VolumeInfoByPath 获取指定路径的卷ID
+func VolumeInfoByPath(path string, obj *VolumeInfo) error {
+	VOL_INFO_SCRIPT := `& {chcp 437 > $null; Get-Volume -FilePath "%s" | Select-Object -Property UniqueId | ConvertTo-Json}`
+	return PSRetrieve(fmt.Sprintf(VOL_INFO_SCRIPT, path), &obj)
+}
+
+type DriverInfo struct {
+	Name string `json:"Name"`
+}
+
+// DriverInfos 获取主机上的盘符信息
+func DriverInfos(obj *[]DriverInfo) error {
+	DRIVER_INFO_SCRIPT := `& {chcp 437 > $null; Get-PSDrive | Select-Object -Property Name | ConvertTo-Json}`
+	return PSRetrieve(DRIVER_INFO_SCRIPT, &obj)
+}
+
 type TcpInfo struct {
 	LocalAddress string `json:"LocalAddress"`
 	LocalPort    int    `json:"LocalPort"`
@@ -116,4 +206,16 @@ func AvailableLetter(usedDrivers datastructure.Set[byte]) byte {
 	}
 
 	return 0
+}
+
+// StartService 启动一个服务
+func StartService(sname string) ([]byte, error) {
+	START_SVC_SCRIPT := `& {chcp 437 > $null; Start-Service -Name "%s"}`
+	return PSExec(fmt.Sprintf(START_SVC_SCRIPT, sname))
+}
+
+// StopService 结束一个服务
+func StopService(sname string) ([]byte, error) {
+	STOP_SVC_SCRIPT := `& {chcp 437 > $null; Stop-Service -Name "%s"}`
+	return PSExec(fmt.Sprintf(STOP_SVC_SCRIPT, sname))
 }
