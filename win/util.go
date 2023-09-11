@@ -193,10 +193,21 @@ func SetCodePage(codePage uint) error {
 	return nil
 }
 
-// DriveLetters 获取当前已被占用的盘符
-func DriveLetters(rcv any) error {
+// DriveLetters 获取当前已被占用的盘符，返回数组对象
+func DriveLetters(driverInfo *[]DriverInfo) error {
 	const DRIVER_LETTERS = `& {chcp 437 > $null; Get-PSDrive | Select-Object -Property Name | ConvertTo-Json}`
-	err := PSRetrieve(DRIVER_LETTERS, rcv)
+	err := PSRetrieve(DRIVER_LETTERS, driverInfo)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DriveLetters 获取当前已被占用的盘符，返回单个对象
+func DriveLetter(driverInfo *DriverInfo) error {
+	const DRIVER_LETTERS = `& {chcp 437 > $null; Get-PSDrive | Select-Object -Property Name | ConvertTo-Json}`
+	err := PSRetrieve(DRIVER_LETTERS, driverInfo)
 	if err != nil {
 		return err
 	}
