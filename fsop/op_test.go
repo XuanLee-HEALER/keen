@@ -9,15 +9,15 @@ import (
 )
 
 func TestCreateRandomFile(t *testing.T) {
-	err := fsop.CreateRandomFile("f4.txt", 2*fsop.GB)
+	err := fsop.CreateRandomFile("f4.txt", 2*fsop.MB)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = fsop.CreateRandomFile("f5.txt", 2*fsop.GB)
+	err = fsop.CreateRandomFile("f5.txt", 2*fsop.MB)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = fsop.CreateRandomFile("f6.txt", 2*fsop.GB)
+	err = fsop.CreateRandomFile("f6.txt", 2*fsop.MB)
 	if err != nil {
 		t.Fatal(err)
 	}
