@@ -54,6 +54,13 @@ func RemoveChildren(path string) error {
 	return nil
 }
 
+func xmin(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // CreateScript 在工作目录创建一个脚本，返回文件名称
 func CreateScript(name string, content []byte) (string, error) {
 	f, err := os.Create(name)
@@ -66,7 +73,7 @@ func CreateScript(name string, content []byte) (string, error) {
 
 	wi, l := 0, len(content)
 	for {
-		lap := min(1024, l)
+		lap := xmin(1024, l)
 		n, err := wr.Write(content[wi : wi+lap])
 		if err != nil {
 			f.Close()
