@@ -2,6 +2,7 @@ package util
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -9,9 +10,34 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 )
+
+// ReadCSVOutput 读取csv输出内容，返回数组的第一个元素为header
+func ReadCSVOutput(bs []byte) [][]string {
+	res := make([][]string, 0)
+	csvPattern := `"[^"]*"`
+	csvReg := regexp.MustCompile(csvPattern)
+	scanner := bufio.NewScanner(bytes.NewReader(bs))
+	isHead := false
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line != "" {
+			if !isHead {
+				secs := csvReg.FindAllString(line, -1)
+				res = append(res, secs)
+				isHead = true
+			} else {
+				secs := csvReg.FindAllString(line, -1)
+				res = append(res, secs)
+			}
+		}
+	}
+
+	return res
+}
 
 // LoginUser 获取当前登录用户
 func LoginUser() string {

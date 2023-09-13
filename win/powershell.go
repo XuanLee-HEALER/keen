@@ -4,13 +4,63 @@ package win
 
 import (
 	"encoding/json"
+	"errors"
 	"os/exec"
 	"strings"
+)
+
+type PSVersion uint
+
+const (
+	PSv1 PSVersion = 1
+	PSv2 PSVersion = 2
+	PSv3 PSVersion = 3
+	PSv5 PSVersion = 5
+	PSv6 PSVersion = 6
+	PSv7 PSVersion = 7
 )
 
 const (
 	POWERSHELL = "powershell.exe"
 )
+
+var currentPSVer PSVersion
+var UnsupportedPSVersionErr error = errors.New("unsupported powershell version")
+
+func SetupPowerShellVersion() error {
+	v, err := PSVersionTable()
+	if err != nil {
+		return err
+	}
+	currentPSVer = v
+	return nil
+}
+
+func PSVersionTable() (PSVersion, error) {
+	PSVERSION := `$PSVersionTable.GetEnumerator().ForEach({if ($_.Key -eq 'PSVersion') {$_.Value.ToString()}})`
+	bs, err := PSExec(PSVERSION)
+	if err != nil {
+		return PSv1, err
+	}
+
+	mv := string(bs)[0]
+	switch mv {
+	case '1':
+		return PSv1, nil
+	case '2':
+		return PSv2, nil
+	case '3':
+		return PSv3, nil
+	case '4', '5':
+		return PSv5, nil
+	case '6':
+		return PSv6, nil
+	case '7':
+		return PSv7, nil
+	default:
+		return PSv1, errors.New("illegal powershell version")
+	}
+}
 
 // PSRetrieve 使用powershell内置的cmdlet，结果为json字符串，直接unmarshal到传入的对象指针中
 func PSRetrieve(xcmd string, obj any) error {

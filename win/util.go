@@ -3,17 +3,24 @@
 package win
 
 import (
+	"bufio"
+	"bytes"
+	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
 	"gitea.fcdm.top/lixuan/keen/datastructure"
+	"gitea.fcdm.top/lixuan/keen/util"
 	"golang.org/x/sys/windows/registry"
 )
 
+var trimSpace = func(r rune) bool { return r == ' ' || r == '\t' }
+
 // GrantFullAccess 给特定路径赋予指定账户的全部访问权限
 func GrantFullAccess(path, account string) error {
-	const GRAND_SCRIPT = `& {
+	var grandScript = `& {
 	chcp 437 > $null; 
 	$NewAcl = Get-Acl -Path "%s";
 	$identity = "%s";
@@ -23,7 +30,7 @@ func GrantFullAccess(path, account string) error {
 	$fileSystemAccessRule = New-Object -TypeName System.Security.AccessControl.FileSystemAccessRule -ArgumentList $fileSystemAccessRuleArgumentList;
 	$NewAcl.SetAccessRule($fileSystemAccessRule);
 	Set-Acl -Path "%s" -AclObject $NewAcl};`
-	_, err := PSExec(fmt.Sprintf(GRAND_SCRIPT, PSEscape(path), account, PSEscape(path)))
+	_, err := PSExec(fmt.Sprintf(grandScript, PSEscape(path), account, PSEscape(path)))
 	if err != nil {
 		return err
 	}
@@ -40,6 +47,7 @@ type ComputerInfo struct {
 	NumberOfLogicalProcessors int                  `json:"CsNumberOfLogicalProcessors"`
 	NumberOfProcessors        int                  `json:"CsNumberOfProcessors"`
 	TotalPhysicalMemory       int64                `json:"CsTotalPhysicalMemory"`
+	TotalPhysicalMemoryStr    string               `json:"CsTotalPhysicalMemoryStr"`
 	Workgroup                 string               `json:"CsWorkgroup"`
 	MultiLanguage             []string             `json:"OsMuiLanguages"`
 	Language                  string               `json:"OsLanguage"`
@@ -56,8 +64,39 @@ type NetworkAdapterInfo struct {
 }
 
 func HostComputerInfo(obj *ComputerInfo) error {
-	COMPUTER_INFO_SCRIPT := `& {chcp 437 > $null; Get-ComputerInfo -Property "WindowsProductName","WindowsInstallationType","CsDNSHostName","CsDomain","CsName","CsNetworkAdapters","CsNumberOfLogicalProcessors","CsNumberOfProcessors","CsTotalPhysicalMemory","CsWorkgroup","OsMuiLanguages","OsLanguage","TimeZone" | ConvertTo-Json}`
-	return PSRetrieve(COMPUTER_INFO_SCRIPT, &obj)
+	var script string
+	switch currentPSVer {
+	case PSv2:
+		script = `& {chcp 437 > $null; systeminfo.exe /FO 'csv'}`
+		bs, err := PSExec(script)
+		if err != nil {
+			return err
+		}
+		sysinfo := util.ReadCSVOutput(bs)
+		for i, h := range sysinfo[0] {
+			switch h {
+			case "Host Name":
+				obj.ComputerName = sysinfo[1][i]
+				obj.DNSHostName = sysinfo[1][i]
+			case "OS Name":
+				obj.WindowsProductName = sysinfo[1][i]
+			case "System Locale":
+				obj.Language = sysinfo[1][i]
+			case "Domain":
+				obj.Domain = sysinfo[1][i]
+			case "Total Physical Memory":
+				obj.TotalPhysicalMemoryStr = sysinfo[1][i]
+			case "Time Zone":
+				obj.TimeZone = sysinfo[1][i]
+			}
+		}
+		return nil
+	case PSv5:
+		script = `& {chcp 437 > $null; Get-ComputerInfo -Property "WindowsProductName","WindowsInstallationType","CsDNSHostName","CsDomain","CsName","CsNetworkAdapters","CsNumberOfLogicalProcessors","CsNumberOfProcessors","CsTotalPhysicalMemory","CsWorkgroup","OsMuiLanguages","OsLanguage","TimeZone" | ConvertTo-Json}`
+		return PSRetrieve(script, &obj)
+	default:
+		return UnsupportedPSVersionErr
+	}
 }
 
 type ServiceInfo struct {
@@ -69,15 +108,33 @@ type ServiceInfo struct {
 }
 
 // ServicesByFilter 根据过滤条件获取服务信息，返回对象数组
-func ServicesByFilter(cond string, obj *[]ServiceInfo) error {
-	SERVICES_SCRIPT := `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | ConvertTo-Json}`
-	return PSRetrieve(fmt.Sprintf(SERVICES_SCRIPT, cond), &obj)
-}
+// func ServicesByFilter(cond string, obj *[]ServiceInfo) error {
+// 	var script string
+// 	switch currentPSVer {
+// 	case PSv2:
+// 		script = `& {chcp 437 > $null; Get-WmiObject -Class Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | ConvertTo-Json}`
+// 		bs, err := PSExec(fmt.Sprintf(script, cond))
+// 	case PSv5:
+// 		script = `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | ConvertTo-Json}`
+// 		return PSRetrieve(fmt.Sprintf(script, cond), &obj)
+// 	default:
+// 		return UnsupportedPSVersionErr
+// 	}
+// }
 
 // ServiceByFilter 根据过滤条件获取服务信息，返回单个对象
 func ServiceByFilter(cond string, obj *ServiceInfo) error {
-	SERVICES_SCRIPT := `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | ConvertTo-Json}`
-	return PSRetrieve(fmt.Sprintf(SERVICES_SCRIPT, cond), &obj)
+	var script string
+	switch currentPSVer {
+	case PSv2:
+		script = `& {chcp 437 > $null; Get-WmiObject -Class Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | ConvertTo-Json}`
+		return PSRetrieve(fmt.Sprintf(script, cond), &obj)
+	case PSv5:
+		script = `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | ConvertTo-Json}`
+		return PSRetrieve(fmt.Sprintf(script, cond), &obj)
+	default:
+		return UnsupportedPSVersionErr
+	}
 }
 
 type ProcessInfo struct {
@@ -87,14 +144,32 @@ type ProcessInfo struct {
 
 // ProcessInfoByName 根据进程名称获取进程信息
 func ProcessInfoByName(pname string, obj *ProcessInfo) error {
-	PROCESS_SCRIPT := `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Process -Filter "Name = '%s'" | Select-Object ProcessId,ParentProcessId | ConvertTo-Json}`
-	return PSRetrieve(fmt.Sprintf(PROCESS_SCRIPT, pname), &obj)
+	var script string
+	switch currentPSVer {
+	case PSv2:
+		script = `& {chcp 437 > $null; Get-WmiObject -Class Win32_Process -Filter "Name = '%s'" | Select-Object ProcessId,ParentProcessId | ConvertTo-Json}`
+		return PSRetrieve(fmt.Sprintf(script, pname), &obj)
+	case PSv5:
+		script = `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Process -Filter "Name = '%s'" | Select-Object ProcessId,ParentProcessId | ConvertTo-Json}`
+		return PSRetrieve(fmt.Sprintf(script, pname), &obj)
+	default:
+		return UnsupportedPSVersionErr
+	}
 }
 
 // ProcessInfoById 根据进程ID获取进程信息
 func ProcessInfoById(pid uint, obj *ProcessInfo) error {
-	PROCESS_SCRIPT := `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = %d" | Select-Object ProcessId,ParentProcessId | ConvertTo-Json}`
-	return PSRetrieve(fmt.Sprintf(PROCESS_SCRIPT, pid), &obj)
+	var script string
+	switch currentPSVer {
+	case PSv2:
+		script = `& {chcp 437 > $null; Get-WmiObject -Class Win32_Process -Filter "ProcessId = %d" | Select-Object ProcessId,ParentProcessId | ConvertTo-Json}`
+		return PSRetrieve(fmt.Sprintf(script, pid), &obj)
+	case PSv5:
+		script = `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = %d" | Select-Object ProcessId,ParentProcessId | ConvertTo-Json}`
+		return PSRetrieve(fmt.Sprintf(script, pid), &obj)
+	default:
+		return UnsupportedPSVersionErr
+	}
 }
 
 type ProductVersionInfo struct {
@@ -102,9 +177,38 @@ type ProductVersionInfo struct {
 }
 
 // SQLServerProductId 获取SQL Server进程的产品ID
-func SQLServerProductId(pid uint, obj *ProductVersionInfo) error {
-	PRODUCT_VER_SCRIPT := `& {chcp 437 > $null; Get-Process -Id %d | Select-Object ProductVersion | ConvertTo-Json}`
-	return PSRetrieve(fmt.Sprintf(PRODUCT_VER_SCRIPT, pid), &obj)
+func SQLServerProductId(pid uint) (ProductVersionInfo, error) {
+	var script string
+	switch currentPSVer {
+	case PSv2:
+		script = `& {chcp 437 > $null; Get-Process -Id %d | Select-Object ProductVersion | Format-List}`
+		var productVerInfo ProductVersionInfo
+		bs, err := PSExec(fmt.Sprintf(script, pid))
+		if err != nil {
+			return productVerInfo, err
+		}
+
+		scanner := bufio.NewScanner(bytes.NewReader(bs))
+		for scanner.Scan() {
+			line := scanner.Text()
+			line = strings.TrimFunc(line, trimSpace)
+			if line != "" {
+				segs := strings.Split(line, ":")
+				productVerInfo.ProductVersion = strings.TrimFunc(segs[1], trimSpace)
+			}
+		}
+		return productVerInfo, nil
+	case PSv5:
+		script = `& {chcp 437 > $null; Get-Process -Id %d | Select-Object ProductVersion | ConvertTo-Json}`
+		var productVerInfo ProductVersionInfo
+		err := PSRetrieve(fmt.Sprintf(script, pid), &productVerInfo)
+		if err != nil {
+			return productVerInfo, err
+		}
+		return productVerInfo, nil
+	default:
+		return ProductVersionInfo{}, UnsupportedPSVersionErr
+	}
 }
 
 type VolumeInfo struct {
@@ -112,19 +216,52 @@ type VolumeInfo struct {
 }
 
 // VolumeInfoByPath 获取指定路径的卷ID
-func VolumeInfoByPath(path string, obj *VolumeInfo) error {
-	VOL_INFO_SCRIPT := `& {chcp 437 > $null; Get-Volume -FilePath "%s" | Select-Object -Property UniqueId | ConvertTo-Json}`
-	return PSRetrieve(fmt.Sprintf(VOL_INFO_SCRIPT, path), &obj)
-}
+func VolumeInfoByPath(path string) (VolumeInfo, error) {
+	var script string
+	switch currentPSVer {
+	case PSv2:
+		script = `Get-WMIObject -Class Win32_Volume | Select-Object Caption,DeviceID | ConvertTo-Csv`
+		var volumeInfo VolumeInfo
+		bs, err := PSExec(script)
+		if err != nil {
+			return volumeInfo, err
+		}
 
-type DriverInfo struct {
-	Name string `json:"Name"`
-}
+		driverToId := make(map[string]string)
+		csv := util.ReadCSVOutput(bs)
+		for j := 1; j < len(csv); j++ {
+			driverToId[csv[j][0]] = csv[j][1]
+		}
 
-// DriverInfos 获取主机上的盘符信息
-func DriverInfos(obj *[]DriverInfo) error {
-	DRIVER_INFO_SCRIPT := `& {chcp 437 > $null; Get-PSDrive | Select-Object -Property Name | ConvertTo-Json}`
-	return PSRetrieve(DRIVER_INFO_SCRIPT, &obj)
+		drivers := make([]string, 0)
+		for k := range driverToId {
+			if util.IsSubDir(k, path) {
+				drivers = append(drivers, k)
+			}
+		}
+
+		if len(drivers) <= 0 {
+			return volumeInfo, errors.New(fmt.Sprintf("no volume information of path [%s] found", path))
+		}
+
+		sort.Slice(drivers, func(i, j int) bool {
+			return len(drivers[i]) > len(drivers[j])
+		})
+
+		volumeInfo.UniqueId = driverToId[drivers[0]]
+		return volumeInfo, nil
+	case PSv5:
+		script := `& {chcp 437 > $null; Get-Volume -FilePath "%s" | Select-Object -Property UniqueId | ConvertTo-Json}`
+		var volumeInfo VolumeInfo
+		err := PSRetrieve(fmt.Sprintf(script, path), &volumeInfo)
+		if err != nil {
+			return volumeInfo, err
+		}
+
+		return volumeInfo, nil
+	default:
+		return VolumeInfo{}, UnsupportedPSVersionErr
+	}
 }
 
 type TcpInfo struct {
@@ -134,14 +271,50 @@ type TcpInfo struct {
 }
 
 // Listening 根据PID查询监听的TCP/IP端口号
-func Listening(pid uint, tcpInfos *[]TcpInfo) error {
-	const LISTEN_SCRIPT = `& {chcp 437 > $null; Get-NetTCPConnection -OwningProcess %d | Select-Object LocalAddress,LocalPort,State | ConvertTo-Json}`
-	err := PSRetrieve(fmt.Sprintf(LISTEN_SCRIPT, pid), tcpInfos)
-	if err != nil {
-		return err
-	}
+func Listening(pid uint) ([]TcpInfo, error) {
+	var script string
+	switch currentPSVer {
+	case PSv2:
+		script = `& {chcp 437 > $null; NETSTAT.EXE -ano | findstr.exe "%d"}`
+		tcpInfos := make([]TcpInfo, 0)
 
-	return nil
+		bs, err := PSExec(fmt.Sprintf(script, pid))
+		if err != nil {
+			return nil, err
+		}
+
+		scanner := bufio.NewScanner(bytes.NewReader(bs))
+		for scanner.Scan() {
+			line := scanner.Text()
+			if line != "" {
+				line = strings.TrimFunc(line, trimSpace)
+				line = strings.ReplaceAll(line, "\t", " ")
+				segs := strings.Split(line, " ")
+				if segs[3] == "LISTENING" {
+					tcpInfo := TcpInfo{}
+					idx := strings.LastIndex(segs[1], ":")
+					tcpInfo.LocalAddress = segs[1][:idx]
+					xport := segs[1][idx+1:]
+					port, _ := strconv.Atoi(xport)
+					tcpInfo.LocalPort = port
+					tcpInfo.State = 2
+					tcpInfos = append(tcpInfos, tcpInfo)
+				}
+			}
+		}
+
+		return tcpInfos, nil
+	case PSv5:
+		script = `& {chcp 437 > $null; Get-NetTCPConnection -OwningProcess %d | Select-Object LocalAddress,LocalPort,State | ConvertTo-Json}`
+		var tcpInfos []TcpInfo
+		err := PSRetrieve(fmt.Sprintf(script, pid), &tcpInfos)
+		if err != nil {
+			return nil, err
+		}
+		return tcpInfos, nil
+	default:
+		return nil, UnsupportedPSVersionErr
+	}
 }
 
 // StringRegVal 获取注册表下指定key的注册表项的值
@@ -193,26 +366,55 @@ func SetCodePage(codePage uint) error {
 	return nil
 }
 
-// DriveLetters 获取当前已被占用的盘符，返回数组对象
-func DriveLetters(driverInfo *[]DriverInfo) error {
-	const DRIVER_LETTERS = `& {chcp 437 > $null; Get-PSDrive | Select-Object -Property Name | ConvertTo-Json}`
-	err := PSRetrieve(DRIVER_LETTERS, driverInfo)
-	if err != nil {
-		return err
-	}
-
-	return nil
+type DriverInfo struct {
+	Name string `json:"Name"`
 }
 
-// DriveLetters 获取当前已被占用的盘符，返回单个对象
-func DriveLetter(driverInfo *DriverInfo) error {
-	const DRIVER_LETTERS = `& {chcp 437 > $null; Get-PSDrive | Select-Object -Property Name | ConvertTo-Json}`
-	err := PSRetrieve(DRIVER_LETTERS, driverInfo)
-	if err != nil {
-		return err
-	}
+// DriveLetters 获取当前已被占用的盘符
+func DriveLetters() ([]DriverInfo, error) {
+	var script string
+	switch currentPSVer {
+	case PSv2:
+		script = `& {chcp 437 > $null; Get-PSDrive | Select-Object -Property Name | ConvertTo-Csv}`
+		bs, err := PSExec(script)
+		if err != nil {
+			return nil, err
+		}
 
-	return nil
+		driverInfos := make([]DriverInfo, 0)
+		csv := util.ReadCSVOutput(bs)
+		if len(csv) <= 0 {
+			return driverInfos, nil
+		} else {
+			for i := 1; i < len(csv); i++ {
+				driverInfo := DriverInfo{}
+				for j, c := range csv[i] {
+					switch csv[0][j] {
+					case "Name":
+						driverInfo.Name = c
+					}
+				}
+				driverInfos = append(driverInfos, driverInfo)
+			}
+		}
+
+		return driverInfos, nil
+	case PSv5:
+		script = `& {chcp 437 > $null; Get-PSDrive | Select-Object -Property Name | ConvertTo-Json}`
+		var driverInfo DriverInfo
+		err := PSRetrieve(script, &driverInfo)
+		if err != nil {
+			var driverInfos []DriverInfo
+			err = PSRetrieve(script, &driverInfos)
+			return nil, err
+		} else {
+			driverInfos := make([]DriverInfo, 0)
+			driverInfos = append(driverInfos, driverInfo)
+			return driverInfos, nil
+		}
+	default:
+		return nil, UnsupportedPSVersionErr
+	}
 }
 
 // AvailableLetter 查找可用盘符
