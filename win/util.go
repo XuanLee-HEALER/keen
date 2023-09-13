@@ -5,7 +5,6 @@ package win
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -107,33 +106,59 @@ type ServiceInfo struct {
 	StartName string `json:"StartName"`
 }
 
-// ServicesByFilter 根据过滤条件获取服务信息，返回对象数组
-// func ServicesByFilter(cond string, obj *[]ServiceInfo) error {
-// 	var script string
-// 	switch currentPSVer {
-// 	case PSv2:
-// 		script = `& {chcp 437 > $null; Get-WmiObject -Class Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | ConvertTo-Json}`
-// 		bs, err := PSExec(fmt.Sprintf(script, cond))
-// 	case PSv5:
-// 		script = `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | ConvertTo-Json}`
-// 		return PSRetrieve(fmt.Sprintf(script, cond), &obj)
-// 	default:
-// 		return UnsupportedPSVersionErr
-// 	}
-// }
-
 // ServiceByFilter 根据过滤条件获取服务信息，返回单个对象
-func ServiceByFilter(cond string, obj *ServiceInfo) error {
+func ServiceByFilter(cond string) ([]ServiceInfo, error) {
 	var script string
 	switch currentPSVer {
 	case PSv2:
-		script = `& {chcp 437 > $null; Get-WmiObject -Class Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | ConvertTo-Json}`
-		return PSRetrieve(fmt.Sprintf(script, cond), &obj)
+		script = `& {chcp 437 > $null; Get-WmiObject -Class Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | ConvertTo-Csv}`
+		bs, err := PSExec(script)
+		if err != nil {
+			return nil, err
+		}
+
+		serviceInfos := make([]ServiceInfo, 0)
+		csv := util.ReadCSVOutput(bs)
+		if len(csv) <= 0 {
+			return serviceInfos, nil
+		} else {
+			for i := 1; i < len(csv); i++ {
+				serviceInfo := ServiceInfo{}
+				for j, c := range csv[i] {
+					switch csv[0][j] {
+					case "ProcessId":
+						v, _ := strconv.Atoi(c)
+						serviceInfo.ProcessID = v
+					case "Name":
+						serviceInfo.Name = c
+					case "State":
+						serviceInfo.State = c
+					case "PathName":
+						serviceInfo.PathName = c
+					case "StartName":
+						serviceInfo.StartName = c
+					}
+				}
+				serviceInfos = append(serviceInfos, serviceInfo)
+			}
+		}
+
+		return serviceInfos, nil
 	case PSv5:
 		script = `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | ConvertTo-Json}`
-		return PSRetrieve(fmt.Sprintf(script, cond), &obj)
+		var serviceInfo ServiceInfo
+		err := PSRetrieve(script, &serviceInfo)
+		if err != nil {
+			var driverInfos []DriverInfo
+			err = PSRetrieve(script, &driverInfos)
+			return nil, err
+		} else {
+			serviceInfos := make([]ServiceInfo, 0)
+			serviceInfos = append(serviceInfos, serviceInfo)
+			return serviceInfos, nil
+		}
 	default:
-		return UnsupportedPSVersionErr
+		return nil, UnsupportedPSVersionErr
 	}
 }
 
@@ -142,33 +167,54 @@ type ProcessInfo struct {
 	ParentProcessId int `json:"ParentProcessId"`
 }
 
-// ProcessInfoByName 根据进程名称获取进程信息
-func ProcessInfoByName(pname string, obj *ProcessInfo) error {
+// ProcessInfoByFilter 根据过滤信息获取进程信息
+func ProcessInfoByFilter(filterStr string) ([]ProcessInfo, error) {
 	var script string
 	switch currentPSVer {
 	case PSv2:
-		script = `& {chcp 437 > $null; Get-WmiObject -Class Win32_Process -Filter "Name = '%s'" | Select-Object ProcessId,ParentProcessId | ConvertTo-Json}`
-		return PSRetrieve(fmt.Sprintf(script, pname), &obj)
-	case PSv5:
-		script = `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Process -Filter "Name = '%s'" | Select-Object ProcessId,ParentProcessId | ConvertTo-Json}`
-		return PSRetrieve(fmt.Sprintf(script, pname), &obj)
-	default:
-		return UnsupportedPSVersionErr
-	}
-}
+		script = `& {chcp 437 > $null; Get-WmiObject -Class Win32_Process -Filter "%s" | Select-Object ProcessId,ParentProcessId | ConvertTo-Json}`
+		bs, err := PSExec(script)
+		if err != nil {
+			return nil, err
+		}
 
-// ProcessInfoById 根据进程ID获取进程信息
-func ProcessInfoById(pid uint, obj *ProcessInfo) error {
-	var script string
-	switch currentPSVer {
-	case PSv2:
-		script = `& {chcp 437 > $null; Get-WmiObject -Class Win32_Process -Filter "ProcessId = %d" | Select-Object ProcessId,ParentProcessId | ConvertTo-Json}`
-		return PSRetrieve(fmt.Sprintf(script, pid), &obj)
+		procInfos := make([]ProcessInfo, 0)
+		csv := util.ReadCSVOutput(bs)
+		if len(csv) <= 0 {
+			return procInfos, nil
+		} else {
+			for i := 1; i < len(csv); i++ {
+				procInfo := ProcessInfo{}
+				for j, c := range csv[i] {
+					switch csv[0][j] {
+					case "ProcessId":
+						v, _ := strconv.Atoi(c)
+						procInfo.ProcessId = v
+					case "ParentProcessId":
+						v, _ := strconv.Atoi(c)
+						procInfo.ParentProcessId = v
+					}
+				}
+				procInfos = append(procInfos, procInfo)
+			}
+		}
+
+		return procInfos, nil
 	case PSv5:
-		script = `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = %d" | Select-Object ProcessId,ParentProcessId | ConvertTo-Json}`
-		return PSRetrieve(fmt.Sprintf(script, pid), &obj)
+		script = `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Process -Filter "%s" | Select-Object ProcessId,ParentProcessId | ConvertTo-Json}`
+		var procInfo ProcessInfo
+		err := PSRetrieve(script, &procInfo)
+		if err != nil {
+			var procInfos []ProcessInfo
+			err = PSRetrieve(script, &procInfos)
+			return nil, err
+		} else {
+			procInfos := make([]ProcessInfo, 0)
+			procInfos = append(procInfos, procInfo)
+			return procInfos, nil
+		}
 	default:
-		return UnsupportedPSVersionErr
+		return nil, UnsupportedPSVersionErr
 	}
 }
 
@@ -241,7 +287,7 @@ func VolumeInfoByPath(path string) (VolumeInfo, error) {
 		}
 
 		if len(drivers) <= 0 {
-			return volumeInfo, errors.New(fmt.Sprintf("no volume information of path [%s] found", path))
+			return volumeInfo, fmt.Errorf("no volume information of path [%s] found", path)
 		}
 
 		sort.Slice(drivers, func(i, j int) bool {
