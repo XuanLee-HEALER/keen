@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"gitea.fcdm.top/lixuan/keen/datastructure"
+	"gitea.fcdm.top/lixuan/keen/fp"
 	"gitea.fcdm.top/lixuan/keen/util"
 	"golang.org/x/sys/windows/registry"
 )
@@ -66,8 +67,8 @@ type NetworkAdapterInfo struct {
 func HostComputerInfo() (ComputerInfo, error) {
 	var script string
 	switch currentPSVer {
-	case PSv2,PSv4:
-		script = `& {chcp 437 > $null; systeminfo.exe /FO 'csv'}`
+	case PSv2, PSv4:
+		script = `& {chcp 437 > $null; systeminfo.exe /FO 'LIST'}`
 		comp := ComputerInfo{}
 		bs, err := PSExec(script)
 		if err != nil {
@@ -124,34 +125,32 @@ func ServiceByFilter(filterStr string) ([]ServiceInfo, error) {
 	switch currentPSVer {
 	case PSv2:
 		script = `& {chcp 437 > $null; Get-WmiObject -Class Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | Format-List}`
-		script = fmt.Sprintf(script, cond)
+		script = fmt.Sprintf(script, filterStr)
 		bs, err := PSExec(script)
 		if err != nil {
 			return nil, err
 		}
 
 		serviceInfos := make([]ServiceInfo, 0)
-		csv := util.ReadCSVOutput(bs)
-		if len(csv) <= 0 {
-			return serviceInfos, nil
+		svcInfos := util.ReadListOutput(bs)
+		if len(svcInfos) <= 0 {
+			return serviceInfos, ErrPSObjectNotFound
 		} else {
-			for i := 1; i < len(csv); i++ {
+			for _, info := range svcInfos {
 				serviceInfo := ServiceInfo{}
-				for j, c := range csv[i] {
-					k := strings.Trim(csv[0][j], "\"")
-					c = strings.Trim(c, "\"")
+				for k, v := range info {
 					switch k {
 					case "ProcessId":
-						v, _ := strconv.Atoi(c)
+						v, _ := strconv.Atoi(v)
 						serviceInfo.ProcessID = v
 					case "Name":
-						serviceInfo.Name = c
+						serviceInfo.Name = v
 					case "State":
-						serviceInfo.State = c
+						serviceInfo.State = v
 					case "PathName":
-						serviceInfo.PathName = c
+						serviceInfo.PathName = v
 					case "StartName":
-						serviceInfo.StartName = c
+						serviceInfo.StartName = v
 					}
 				}
 				serviceInfos = append(serviceInfos, serviceInfo)
@@ -161,7 +160,7 @@ func ServiceByFilter(filterStr string) ([]ServiceInfo, error) {
 		return serviceInfos, nil
 	case PSv5:
 		script = `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | ConvertTo-Json}`
-		script = fmt.Sprintf(script, cond)
+		script = fmt.Sprintf(script, filterStr)
 		var serviceInfo ServiceInfo
 		err := PSRetrieve(script, &serviceInfo)
 		if err != nil {
@@ -191,36 +190,38 @@ func ProcessInfoByFilter(filterStr string) ([]ProcessInfo, error) {
 	var script string
 	switch currentPSVer {
 	case PSv2:
-		script = `& {chcp 437 > $null; Get-WmiObject -Class Win32_Process -Filter "%s" | Select-Object ProcessId,ParentProcessId | ConvertTo-Json}`
+		script = `& {chcp 437 > $null; Get-WmiObject -Class Win32_Process -Filter "%s" | Select-Object ProcessId,ParentProcessId | Format-List}`
+		script = fmt.Sprintf(script, filterStr)
 		bs, err := PSExec(script)
 		if err != nil {
 			return nil, err
 		}
 
-		procInfos := make([]ProcessInfo, 0)
-		csv := util.ReadCSVOutput(bs)
-		if len(csv) <= 0 {
-			return procInfos, nil
+		processInfos := make([]ProcessInfo, 0)
+		procInfos := util.ReadListOutput(bs)
+		if len(procInfos) <= 0 {
+			return processInfos, ErrPSObjectNotFound
 		} else {
-			for i := 1; i < len(csv); i++ {
-				procInfo := ProcessInfo{}
-				for j, c := range csv[i] {
-					switch csv[0][j] {
+			for _, info := range procInfos {
+				processInfo := ProcessInfo{}
+				for k, v := range info {
+					switch k {
 					case "ProcessId":
-						v, _ := strconv.Atoi(c)
-						procInfo.ProcessId = v
+						v, _ := strconv.Atoi(v)
+						processInfo.ProcessId = v
 					case "ParentProcessId":
-						v, _ := strconv.Atoi(c)
-						procInfo.ParentProcessId = v
+						v, _ := strconv.Atoi(v)
+						processInfo.ParentProcessId = v
 					}
 				}
-				procInfos = append(procInfos, procInfo)
+				processInfos = append(processInfos, processInfo)
 			}
 		}
 
-		return procInfos, nil
+		return processInfos, nil
 	case PSv5:
 		script = `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Process -Filter "%s" | Select-Object ProcessId,ParentProcessId | ConvertTo-Json}`
+		script = fmt.Sprintf(script, filterStr)
 		var procInfo ProcessInfo
 		err := PSRetrieve(script, &procInfo)
 		if err != nil {
@@ -253,15 +254,12 @@ func SQLServerProductId(pid uint) (ProductVersionInfo, error) {
 			return productVerInfo, err
 		}
 
-		scanner := bufio.NewScanner(bytes.NewReader(bs))
-		for scanner.Scan() {
-			line := scanner.Text()
-			line = strings.TrimFunc(line, util.TrimSpace)
-			if line != "" {
-				segs := strings.Split(line, ":")
-				productVerInfo.ProductVersion = strings.TrimFunc(segs[1], util.TrimSpace)
-			}
+		prodInfos := util.ReadListOutput(bs)
+		if len(prodInfos) <= 0 {
+			return productVerInfo, ErrPSObjectNotFound
 		}
+
+		productVerInfo.ProductVersion = prodInfos[0]["ProductVersion"]
 		return productVerInfo, nil
 	case PSv5:
 		script = `& {chcp 437 > $null; Get-Process -Id %d | Select-Object ProductVersion | ConvertTo-Json}`
@@ -293,9 +291,19 @@ func VolumeInfoByPath(path string) (VolumeInfo, error) {
 		}
 
 		driverToId := make(map[string]string)
-		csv := util.ReadCSVOutput(bs)
-		for j := 1; j < len(csv); j++ {
-			driverToId[csv[j][0]] = csv[j][1]
+		driverInfos := util.ReadListOutput(bs)
+
+		for _, info := range driverInfos {
+			var cap, dev string
+			for k, v := range info {
+				switch k {
+				case "Caption":
+					cap = v
+				case "DeviceID":
+					dev = v
+				}
+			}
+			driverToId[cap] = dev
 		}
 
 		drivers := make([]string, 0)
@@ -306,7 +314,7 @@ func VolumeInfoByPath(path string) (VolumeInfo, error) {
 		}
 
 		if len(drivers) <= 0 {
-			return volumeInfo, fmt.Errorf("no volume information of path [%s] found", path)
+			return volumeInfo, ErrPSObjectNotFound
 		}
 
 		sort.Slice(drivers, func(i, j int) bool {
@@ -355,6 +363,8 @@ func Listening(pid uint) ([]TcpInfo, error) {
 				line = strings.TrimFunc(line, util.TrimSpace)
 				line = strings.ReplaceAll(line, "\t", " ")
 				segs := strings.Split(line, " ")
+				segs = fp.Map[string, string](segs, func(e string) string { return strings.TrimFunc(e, util.TrimSpace) })
+				segs = fp.Filter[string](segs, func(e string) bool { return e != "" })
 				if segs[3] == "LISTENING" {
 					tcpInfo := TcpInfo{}
 					idx := strings.LastIndex(segs[1], ":")
@@ -366,6 +376,10 @@ func Listening(pid uint) ([]TcpInfo, error) {
 					tcpInfos = append(tcpInfos, tcpInfo)
 				}
 			}
+		}
+
+		if len(tcpInfos) <= 0 {
+			return tcpInfos, ErrPSObjectNotFound
 		}
 
 		return tcpInfos, nil
@@ -449,14 +463,14 @@ func DriveLetters() ([]DriverInfo, error) {
 		driverInfos := make([]DriverInfo, 0)
 		driverList := util.ReadListOutput(bs)
 		if len(driverList) <= 0 {
-			return driverInfos, 
+			return driverInfos, ErrPSObjectNotFound
 		} else {
-			for i := 1; i < len(csv); i++ {
+			for _, driver := range driverList {
 				driverInfo := DriverInfo{}
-				for j, c := range csv[i] {
-					switch csv[0][j] {
+				for k, v := range driver {
+					switch k {
 					case "Name":
-						driverInfo.Name = c
+						driverInfo.Name = v
 					}
 				}
 				driverInfos = append(driverInfos, driverInfo)

@@ -28,10 +28,11 @@ func ReadListOutput(bs []byte) []map[string]string {
 		line := scanner.Text()
 		if line != "" {
 			colonIdx := strings.Index(line, ":")
-			if colonIdx != -1 && !valid {
+			if colonIdx != -1 {
 				k, v := line[:colonIdx], line[colonIdx+1:]
 				k, v = strings.TrimFunc(k, TrimSpace), strings.TrimFunc(v, TrimSpace)
 				tmap[k] = v
+				valid = true
 			}
 		} else {
 			if valid {
@@ -40,6 +41,10 @@ func ReadListOutput(bs []byte) []map[string]string {
 				tmap = make(map[string]string)
 			}
 		}
+	}
+
+	if len(tmap) > 0 {
+		res = append(res, tmap)
 	}
 
 	return res
