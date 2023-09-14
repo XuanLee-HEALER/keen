@@ -10,28 +10,34 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 )
 
+var TrimSpace = func(r rune) bool { return r == ' ' || r == '\t' }
+
 // ReadCSVOutput 读取csv输出内容，返回数组的第一个元素为header
-func ReadCSVOutput(bs []byte) [][]string {
-	res := make([][]string, 0)
-	csvPattern := `"[^"]*"`
-	csvReg := regexp.MustCompile(csvPattern)
+func ReadListOutput(bs []byte) []map[string]string {
+	res := make([]map[string]string, 0)
+
 	scanner := bufio.NewScanner(bytes.NewReader(bs))
-	isHead := false
+	valid := false
+
+	tmap := make(map[string]string)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line != "" {
-			if !isHead {
-				secs := csvReg.FindAllString(line, -1)
-				res = append(res, secs)
-				isHead = true
-			} else {
-				secs := csvReg.FindAllString(line, -1)
-				res = append(res, secs)
+			colonIdx := strings.Index(line, ":")
+			if colonIdx != -1 && !valid {
+				k, v := line[:colonIdx], line[colonIdx+1:]
+				k, v = strings.TrimFunc(k, TrimSpace), strings.TrimFunc(v, TrimSpace)
+				tmap[k] = v
+			}
+		} else {
+			if valid {
+				valid = !valid
+				res = append(res, tmap)
+				tmap = make(map[string]string)
 			}
 		}
 	}

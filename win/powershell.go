@@ -15,6 +15,7 @@ const (
 	PSv1 PSVersion = 1
 	PSv2 PSVersion = 2
 	PSv3 PSVersion = 3
+	PSv4 PSVersion = 4
 	PSv5 PSVersion = 5
 	PSv6 PSVersion = 6
 	PSv7 PSVersion = 7
@@ -25,7 +26,7 @@ const (
 )
 
 var currentPSVer PSVersion
-var UnsupportedPSVersionErr error = errors.New("unsupported powershell version")
+var ErrUnsupportedPSVersion error = errors.New("unsupported powershell version")
 
 func SetupPowerShellVersion() error {
 	v, err := PSVersionTable()
@@ -37,7 +38,12 @@ func SetupPowerShellVersion() error {
 }
 
 func PSVersionTable() (PSVersion, error) {
-	PSVERSION := `$PSVersionTable.GetEnumerator().ForEach({if ($_.Key -eq 'PSVersion') {$_.Value.ToString()}})`
+	PSVERSION := `foreach ($k in $PSVersionTable.Keys) {
+	if ($k -eq 'PSVersion') {
+		$PSVersionTable[$k].ToString();
+		break;
+	}
+}`
 	bs, err := PSExec(PSVERSION)
 	if err != nil {
 		return PSv1, err
@@ -51,7 +57,9 @@ func PSVersionTable() (PSVersion, error) {
 		return PSv2, nil
 	case '3':
 		return PSv3, nil
-	case '4', '5':
+	case '4':
+		return PSv4, nil
+	case '5':
 		return PSv5, nil
 	case '6':
 		return PSv6, nil
@@ -74,6 +82,8 @@ func PSRetrieve(xcmd string, obj any) error {
 	if err != nil {
 		return err
 	}
+	println("command=>", cmd.String())
+	println("output=>", string(bs))
 
 	err = json.Unmarshal(bs, obj)
 	if err != nil {
@@ -90,11 +100,13 @@ func PSExec(xcmd string) ([]byte, error) {
 		return nil, err
 	}
 
-	c := exec.Command(pshell, "-Command", xcmd)
-	bs, err := c.CombinedOutput()
+	cmd := exec.Command(pshell, "-Command", xcmd)
+	bs, err := cmd.CombinedOutput()
 	if err != nil {
 		return bs, err
 	}
+	println("command=>", cmd.String())
+	println("output=>", string(bs))
 
 	return bs, nil
 }

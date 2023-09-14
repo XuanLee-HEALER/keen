@@ -5,6 +5,7 @@ package win
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -15,7 +16,7 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-var trimSpace = func(r rune) bool { return r == ' ' || r == '\t' }
+var ErrPSObjectNotFound error = errors.New("failed to find specific object")
 
 // GrantFullAccess 给特定路径赋予指定账户的全部访问权限
 func GrantFullAccess(path, account string) error {
@@ -62,39 +63,50 @@ type NetworkAdapterInfo struct {
 	IPAddresses      string `json:"IPAddresses"`
 }
 
-func HostComputerInfo(obj *ComputerInfo) error {
+func HostComputerInfo() (ComputerInfo, error) {
 	var script string
 	switch currentPSVer {
-	case PSv2:
+	case PSv2,PSv4:
 		script = `& {chcp 437 > $null; systeminfo.exe /FO 'csv'}`
+		comp := ComputerInfo{}
 		bs, err := PSExec(script)
 		if err != nil {
-			return err
+			return comp, err
 		}
-		sysinfo := util.ReadCSVOutput(bs)
-		for i, h := range sysinfo[0] {
-			switch h {
-			case "Host Name":
-				obj.ComputerName = sysinfo[1][i]
-				obj.DNSHostName = sysinfo[1][i]
-			case "OS Name":
-				obj.WindowsProductName = sysinfo[1][i]
-			case "System Locale":
-				obj.Language = sysinfo[1][i]
-			case "Domain":
-				obj.Domain = sysinfo[1][i]
-			case "Total Physical Memory":
-				obj.TotalPhysicalMemoryStr = sysinfo[1][i]
-			case "Time Zone":
-				obj.TimeZone = sysinfo[1][i]
+		sysinfo := util.ReadListOutput(bs)
+
+		if len(sysinfo) <= 0 {
+			return comp, ErrPSObjectNotFound
+		}
+
+		for _, info := range sysinfo {
+			for k, v := range info {
+				switch k {
+				case "Host Name":
+					comp.ComputerName = v
+					comp.DNSHostName = v
+				case "OS Name":
+					comp.WindowsProductName = v
+				case "System Locale":
+					comp.Language = v
+				case "Domain":
+					comp.Domain = v
+				case "Total Physical Memory":
+					comp.TotalPhysicalMemoryStr = v
+				case "Time Zone":
+					comp.TimeZone = v
+				}
 			}
 		}
-		return nil
+
+		return comp, nil
 	case PSv5:
 		script = `& {chcp 437 > $null; Get-ComputerInfo -Property "WindowsProductName","WindowsInstallationType","CsDNSHostName","CsDomain","CsName","CsNetworkAdapters","CsNumberOfLogicalProcessors","CsNumberOfProcessors","CsTotalPhysicalMemory","CsWorkgroup","OsMuiLanguages","OsLanguage","TimeZone" | ConvertTo-Json}`
-		return PSRetrieve(script, &obj)
+		var comp ComputerInfo
+		err := PSRetrieve(script, &comp)
+		return comp, err
 	default:
-		return UnsupportedPSVersionErr
+		return ComputerInfo{}, ErrUnsupportedPSVersion
 	}
 }
 
@@ -107,11 +119,12 @@ type ServiceInfo struct {
 }
 
 // ServiceByFilter 根据过滤条件获取服务信息，返回单个对象
-func ServiceByFilter(cond string) ([]ServiceInfo, error) {
+func ServiceByFilter(filterStr string) ([]ServiceInfo, error) {
 	var script string
 	switch currentPSVer {
 	case PSv2:
-		script = `& {chcp 437 > $null; Get-WmiObject -Class Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | ConvertTo-Csv}`
+		script = `& {chcp 437 > $null; Get-WmiObject -Class Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | Format-List}`
+		script = fmt.Sprintf(script, cond)
 		bs, err := PSExec(script)
 		if err != nil {
 			return nil, err
@@ -125,7 +138,9 @@ func ServiceByFilter(cond string) ([]ServiceInfo, error) {
 			for i := 1; i < len(csv); i++ {
 				serviceInfo := ServiceInfo{}
 				for j, c := range csv[i] {
-					switch csv[0][j] {
+					k := strings.Trim(csv[0][j], "\"")
+					c = strings.Trim(c, "\"")
+					switch k {
 					case "ProcessId":
 						v, _ := strconv.Atoi(c)
 						serviceInfo.ProcessID = v
@@ -146,19 +161,23 @@ func ServiceByFilter(cond string) ([]ServiceInfo, error) {
 		return serviceInfos, nil
 	case PSv5:
 		script = `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | ConvertTo-Json}`
+		script = fmt.Sprintf(script, cond)
 		var serviceInfo ServiceInfo
 		err := PSRetrieve(script, &serviceInfo)
 		if err != nil {
-			var driverInfos []DriverInfo
-			err = PSRetrieve(script, &driverInfos)
-			return nil, err
+			var serviceInfos []ServiceInfo
+			err = PSRetrieve(script, &serviceInfos)
+			if err != nil {
+				return nil, err
+			}
+			return serviceInfos, nil
 		} else {
 			serviceInfos := make([]ServiceInfo, 0)
 			serviceInfos = append(serviceInfos, serviceInfo)
 			return serviceInfos, nil
 		}
 	default:
-		return nil, UnsupportedPSVersionErr
+		return nil, ErrUnsupportedPSVersion
 	}
 }
 
@@ -214,7 +233,7 @@ func ProcessInfoByFilter(filterStr string) ([]ProcessInfo, error) {
 			return procInfos, nil
 		}
 	default:
-		return nil, UnsupportedPSVersionErr
+		return nil, ErrUnsupportedPSVersion
 	}
 }
 
@@ -237,10 +256,10 @@ func SQLServerProductId(pid uint) (ProductVersionInfo, error) {
 		scanner := bufio.NewScanner(bytes.NewReader(bs))
 		for scanner.Scan() {
 			line := scanner.Text()
-			line = strings.TrimFunc(line, trimSpace)
+			line = strings.TrimFunc(line, util.TrimSpace)
 			if line != "" {
 				segs := strings.Split(line, ":")
-				productVerInfo.ProductVersion = strings.TrimFunc(segs[1], trimSpace)
+				productVerInfo.ProductVersion = strings.TrimFunc(segs[1], util.TrimSpace)
 			}
 		}
 		return productVerInfo, nil
@@ -253,7 +272,7 @@ func SQLServerProductId(pid uint) (ProductVersionInfo, error) {
 		}
 		return productVerInfo, nil
 	default:
-		return ProductVersionInfo{}, UnsupportedPSVersionErr
+		return ProductVersionInfo{}, ErrUnsupportedPSVersion
 	}
 }
 
@@ -266,7 +285,7 @@ func VolumeInfoByPath(path string) (VolumeInfo, error) {
 	var script string
 	switch currentPSVer {
 	case PSv2:
-		script = `Get-WMIObject -Class Win32_Volume | Select-Object Caption,DeviceID | ConvertTo-Csv`
+		script = `Get-WMIObject -Class Win32_Volume | Select-Object Caption,DeviceID | Format-List`
 		var volumeInfo VolumeInfo
 		bs, err := PSExec(script)
 		if err != nil {
@@ -306,7 +325,7 @@ func VolumeInfoByPath(path string) (VolumeInfo, error) {
 
 		return volumeInfo, nil
 	default:
-		return VolumeInfo{}, UnsupportedPSVersionErr
+		return VolumeInfo{}, ErrUnsupportedPSVersion
 	}
 }
 
@@ -333,7 +352,7 @@ func Listening(pid uint) ([]TcpInfo, error) {
 		for scanner.Scan() {
 			line := scanner.Text()
 			if line != "" {
-				line = strings.TrimFunc(line, trimSpace)
+				line = strings.TrimFunc(line, util.TrimSpace)
 				line = strings.ReplaceAll(line, "\t", " ")
 				segs := strings.Split(line, " ")
 				if segs[3] == "LISTENING" {
@@ -359,7 +378,7 @@ func Listening(pid uint) ([]TcpInfo, error) {
 		}
 		return tcpInfos, nil
 	default:
-		return nil, UnsupportedPSVersionErr
+		return nil, ErrUnsupportedPSVersion
 	}
 }
 
@@ -421,16 +440,16 @@ func DriveLetters() ([]DriverInfo, error) {
 	var script string
 	switch currentPSVer {
 	case PSv2:
-		script = `& {chcp 437 > $null; Get-PSDrive | Select-Object -Property Name | ConvertTo-Csv}`
+		script = `& {chcp 437 > $null; Get-PSDrive | Select-Object -Property Name | Format-List}`
 		bs, err := PSExec(script)
 		if err != nil {
 			return nil, err
 		}
 
 		driverInfos := make([]DriverInfo, 0)
-		csv := util.ReadCSVOutput(bs)
-		if len(csv) <= 0 {
-			return driverInfos, nil
+		driverList := util.ReadListOutput(bs)
+		if len(driverList) <= 0 {
+			return driverInfos, 
 		} else {
 			for i := 1; i < len(csv); i++ {
 				driverInfo := DriverInfo{}
@@ -459,7 +478,7 @@ func DriveLetters() ([]DriverInfo, error) {
 			return driverInfos, nil
 		}
 	default:
-		return nil, UnsupportedPSVersionErr
+		return nil, ErrUnsupportedPSVersion
 	}
 }
 
