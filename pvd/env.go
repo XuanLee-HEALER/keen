@@ -92,6 +92,19 @@ func (arg FCDMArgument) GetImgConfig(imageConfigName string, isEncode bool, deco
 	return v, nil
 }
 
+// GetCompatConfig 获取镜像配置覆盖普通配置之后的配置项的值
+func (arg FCDMArgument) GetCompatConfig(configName string, isEncode bool, decode func(str string) (string, error)) (string, error) {
+	v, err := arg.GetConfig(configName, isEncode, decode)
+	if err != nil {
+		return v, err
+	}
+	sv, err := arg.GetImgConfig(configName, isEncode, decode)
+	if sv != "" && err == nil {
+		return sv, nil
+	}
+	return v, err
+}
+
 // GetVolume 获取备份设备的目录
 func (arg FCDMArgument) GetVolume(volumeIdentity string) string {
 	return arg.VolumeInformation[model.FCDM_EV_VOLUME_PREFIX+volumeIdentity]
