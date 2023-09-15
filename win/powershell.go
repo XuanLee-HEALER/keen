@@ -5,9 +5,15 @@ package win
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	glog "log"
 	"os/exec"
 	"strings"
+
+	"gitea.fcdm.top/lixuan/keen/ylog"
 )
+
+var log *glog.Logger
 
 type PSVersion uint
 
@@ -27,6 +33,19 @@ const (
 
 var currentPSVer PSVersion
 var ErrUnsupportedPSVersion error = errors.New("unsupported powershell version")
+
+func SetupLogger(xlog *glog.Logger) {
+	if xlog != nil {
+		log = xlog
+	} else {
+		il := ylog.YLogger{
+			ConsoleLevel:    ylog.Trace,
+			ConsoleColorful: true,
+			FileLog:         false,
+		}
+		log = il.InitLogger()
+	}
+}
 
 func SetupPowerShellVersion() error {
 	v, err := PSVersionTable()
@@ -72,6 +91,7 @@ func PSVersionTable() (PSVersion, error) {
 
 // PSRetrieve 使用powershell内置的cmdlet，结果为json字符串，直接unmarshal到传入的对象指针中
 func PSRetrieve(xcmd string, obj any) error {
+	log.Println(ylog.TRACE, fmt.Sprintf("powershell retrieve object: \n%s", xcmd))
 	pshell, err := exec.LookPath(POWERSHELL)
 	if err != nil {
 		return err
@@ -82,8 +102,7 @@ func PSRetrieve(xcmd string, obj any) error {
 	if err != nil {
 		return err
 	}
-	println("command=>", cmd.String())
-	println("output=>", string(bs))
+	log.Println(ylog.TRACE, fmt.Sprintf("powershell retrieve object output: \n%s", string(bs)))
 
 	err = json.Unmarshal(bs, obj)
 	if err != nil {
@@ -95,6 +114,7 @@ func PSRetrieve(xcmd string, obj any) error {
 
 // Exec 使用powershell运行命令，返回输出内容
 func PSExec(xcmd string) ([]byte, error) {
+	log.Println(ylog.TRACE, fmt.Sprintf("powershell execute command: \n%s", xcmd))
 	pshell, err := exec.LookPath(POWERSHELL)
 	if err != nil {
 		return nil, err
@@ -105,8 +125,7 @@ func PSExec(xcmd string) ([]byte, error) {
 	if err != nil {
 		return bs, err
 	}
-	println("command=>", cmd.String())
-	println("output=>", string(bs))
+	log.Println(ylog.TRACE, fmt.Sprintf("powershell execute command output: \n%s", string(bs)))
 
 	return bs, nil
 }
