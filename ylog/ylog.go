@@ -123,7 +123,7 @@ type ConsoleWriter struct {
 
 func (w ConsoleWriter) Write(p []byte) (n int, err error) {
 	if runtime.GOOS == "windows" {
-		p = bytes.Replace(p, []byte("\n"), []byte("\r\n"), 1)
+		p = bytes.Replace(p, []byte("\n"), []byte("\r\n"), -1)
 	}
 
 	segs := bytes.Split(p, []byte(" "))
@@ -208,7 +208,7 @@ type FileWriter struct {
 
 func (w FileWriter) Write(p []byte) (n int, err error) {
 	if runtime.GOOS == "windows" {
-		p = bytes.Replace(p, []byte("\n"), []byte("\r\n"), 1)
+		p = bytes.Replace(p, []byte("\n"), []byte("\r\n"), -1)
 	}
 
 	segs := bytes.Split(p, []byte(" "))

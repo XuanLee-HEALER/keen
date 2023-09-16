@@ -1,21 +1,21 @@
-$dirs = @(Get-ChildItem -Exclude "*.ps1")
+$dirs = @(Get-ChildItem -Exclude '*.ps1', 'vendor')
 $dirs.GetType().FullName
-$remoteIP = '192.168.110.170'
+$remoteIP = @('192.168.110.170', '192.168.110.175')
+$remoteIP = @($remoteIP[1])
 $remotePath = 'C:\project\keen'
 
-if ($null -eq $cred) {
-  $cred = Get-Credential -UserName 'Administrator'
-}
-
-$target = New-PSSession -ComputerName $remoteIP -Credential $cred
-Invoke-Command -ScriptBlock { Remove-Item -Path 'C:\project\keen\*' -Recurse } -Session $target
-foreach ($dir in $dirs) {
-  if ($dir.GetType() -eq [System.IO.DirectoryInfo]) {
-    Copy-Item -Path ([System.IO.DirectoryInfo] $dir).BaseName -Destination $remotePath -Recurse -ToSession $target
+foreach ($ip in $remoteIP) {
+  $cred = Get-Credential -UserName 'administrator'
+  $target = New-PSSession -ComputerName $ip -Credential $cred
+  Invoke-Command -ScriptBlock { Get-ChildItem -Path $remotePath | Where-Object { $_.Name -ne 'vendor' } | Remove-Item -Recurse } -Session $target
+  foreach ($dir in $dirs) {
+    if ($dir.GetType() -eq [System.IO.DirectoryInfo]) {
+      Copy-Item -Path ([System.IO.DirectoryInfo] $dir).BaseName -Destination $remotePath -Recurse -ToSession $target
+    }
+    elseif ($dir.GetType() -eq [System.IO.FileInfo]) {
+      Copy-Item -Path ([System.IO.FileInfo] $dir).FullName -Destination $remotePath -ToSession $target 
+    }
   }
-  elseif ($dir.GetType() -eq [System.IO.FileInfo]) {
-    Copy-Item -Path ([System.IO.FileInfo] $dir).FullName -Destination $remotePath -ToSession $target 
-  }
-}
 
-Remove-PSSession $target
+  Remove-PSSession $target
+}

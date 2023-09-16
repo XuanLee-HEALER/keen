@@ -158,7 +158,7 @@ func ServiceByFilter(filterStr string) ([]ServiceInfo, error) {
 		}
 
 		return serviceInfos, nil
-	case PSv5:
+	case PSv4, PSv5:
 		script = `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Service | Where-Object {%s} | Select-Object ProcessId,Name,State,PathName,StartName | ConvertTo-Json}`
 		script = fmt.Sprintf(script, filterStr)
 		var serviceInfo ServiceInfo
@@ -219,7 +219,7 @@ func ProcessInfoByFilter(filterStr string) ([]ProcessInfo, error) {
 		}
 
 		return processInfos, nil
-	case PSv5:
+	case PSv4, PSv5:
 		script = `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Process -Filter "%s" | Select-Object ProcessId,ParentProcessId | ConvertTo-Json}`
 		script = fmt.Sprintf(script, filterStr)
 		var procInfo ProcessInfo
@@ -261,7 +261,7 @@ func SQLServerProductId(pid uint) (ProductVersionInfo, error) {
 
 		productVerInfo.ProductVersion = prodInfos[0]["ProductVersion"]
 		return productVerInfo, nil
-	case PSv5:
+	case PSv4, PSv5:
 		script = `& {chcp 437 > $null; Get-Process -Id %d | Select-Object ProductVersion | ConvertTo-Json}`
 		var productVerInfo ProductVersionInfo
 		err := PSRetrieve(fmt.Sprintf(script, pid), &productVerInfo)
@@ -323,7 +323,7 @@ func VolumeInfoByPath(path string) (VolumeInfo, error) {
 
 		volumeInfo.UniqueId = driverToId[drivers[0]]
 		return volumeInfo, nil
-	case PSv5:
+	case PSv4, PSv5:
 		script := `& {chcp 437 > $null; Get-Volume -FilePath "%s" | Select-Object -Property UniqueId | ConvertTo-Json}`
 		var volumeInfo VolumeInfo
 		err := PSRetrieve(fmt.Sprintf(script, path), &volumeInfo)
@@ -383,7 +383,7 @@ func Listening(pid uint) ([]TcpInfo, error) {
 		}
 
 		return tcpInfos, nil
-	case PSv5:
+	case PSv4, PSv5:
 		script = `& {chcp 437 > $null; Get-NetTCPConnection -OwningProcess %d | Select-Object LocalAddress,LocalPort,State | ConvertTo-Json}`
 		var tcpInfos []TcpInfo
 		err := PSRetrieve(fmt.Sprintf(script, pid), &tcpInfos)
@@ -478,7 +478,7 @@ func DriveLetters() ([]DriverInfo, error) {
 		}
 
 		return driverInfos, nil
-	case PSv5:
+	case PSv4, PSv5:
 		script = `& {chcp 437 > $null; Get-PSDrive | Select-Object -Property Name | ConvertTo-Json}`
 		var driverInfo DriverInfo
 		err := PSRetrieve(script, &driverInfo)

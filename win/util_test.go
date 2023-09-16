@@ -32,9 +32,9 @@ func TestServiceByFilter(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cond0 := `$_.Name -eq 'AJRouter'`
-	cond1 := `$_.Name -eq 'MSSQLSERVER'`
-	cond2 := `$_.Name -like 'A*'`
+	cond0 := `$_.Name -eq 'AJRouter' -and $_.State -neq 'Stopped'`
+	cond1 := `$_.Name -eq 'MSSQLSERVER' -and $_.State -neq 'Stopped'`
+	cond2 := `$_.Name -like 'A*' -and $_.State -neq 'Stopped'`
 	conds := []string{cond0, cond1, cond2}
 
 	for _, cond := range conds {
