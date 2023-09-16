@@ -323,7 +323,23 @@ func VolumeInfoByPath(path string) (VolumeInfo, error) {
 
 		volumeInfo.UniqueId = driverToId[drivers[0]]
 		return volumeInfo, nil
-	case PSv4, PSv5:
+	case PSv4:
+		script := `& {chcp 437 > $null; Get-Volume -FilePath "%s" | Select-Object -Property ObjectId | Format-List}`
+		var volumeInfo VolumeInfo
+		bs, err := PSExec(fmt.Sprintf(script, path))
+		if err != nil {
+			return volumeInfo, err
+		}
+
+		volIds := util.ReadListOutput(bs)
+		if len(volIds) <= 0 {
+			return volumeInfo, ErrPSObjectNotFound
+		}
+
+		volumeInfo.UniqueId = volIds[0]["ObjectId"]
+
+		return volumeInfo, nil
+	case PSv5:
 		script := `& {chcp 437 > $null; Get-Volume -FilePath "%s" | Select-Object -Property UniqueId | ConvertTo-Json}`
 		var volumeInfo VolumeInfo
 		err := PSRetrieve(fmt.Sprintf(script, path), &volumeInfo)
