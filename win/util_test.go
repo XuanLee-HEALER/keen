@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"gitea.fcdm.top/lixuan/keen/datastructure"
 	"gitea.fcdm.top/lixuan/keen/win"
 )
 
@@ -137,4 +138,15 @@ func TestDriveLetters(t *testing.T) {
 	}
 
 	print(drivers, t)
+
+	driverSet := make(datastructure.Set[byte])
+	for _, driver := range drivers {
+		if len(driver.Name) <= 1 {
+			driverSet.Add(driver.Name[0])
+		}
+	}
+
+	avail := win.AvailableLetter(driverSet)
+
+	t.Log("avail", string(avail))
 }

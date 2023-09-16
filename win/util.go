@@ -166,10 +166,7 @@ func ServiceByFilter(filterStr string) ([]ServiceInfo, error) {
 		if err != nil {
 			var serviceInfos []ServiceInfo
 			err = PSRetrieve(script, &serviceInfos)
-			if err != nil {
-				return nil, err
-			}
-			return serviceInfos, nil
+			return serviceInfos, err
 		} else {
 			serviceInfos := make([]ServiceInfo, 0)
 			serviceInfos = append(serviceInfos, serviceInfo)
@@ -227,7 +224,7 @@ func ProcessInfoByFilter(filterStr string) ([]ProcessInfo, error) {
 		if err != nil {
 			var procInfos []ProcessInfo
 			err = PSRetrieve(script, &procInfos)
-			return nil, err
+			return procInfos, err
 		} else {
 			procInfos := make([]ProcessInfo, 0)
 			procInfos = append(procInfos, procInfo)
@@ -501,7 +498,7 @@ func DriveLetters() ([]DriverInfo, error) {
 		if err != nil {
 			var driverInfos []DriverInfo
 			err = PSRetrieve(script, &driverInfos)
-			return nil, err
+			return driverInfos, err
 		} else {
 			driverInfos := make([]DriverInfo, 0)
 			driverInfos = append(driverInfos, driverInfo)

@@ -10,7 +10,7 @@ import (
 
 func init() {
 	logger := ylog.YLogger{
-		ConsoleLevel:    ylog.Info,
+		ConsoleLevel:    ylog.Trace,
 		ConsoleColorful: true,
 		FileLog:         true,
 		FileLogDir:      "C:\\tlog",
