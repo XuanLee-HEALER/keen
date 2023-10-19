@@ -63,7 +63,10 @@ func (pkg LangPackage) ApplyMultiLingual(defaultNation Nation, config *model.Con
 	config.I18n = make(map[string]model.ConfigI18n)
 
 	config.Desc = pkg.displays[defaultNation.ID][config.Name].desc
-	config.Options = pkg.displays[defaultNation.ID][config.Name].optionsName
+
+	if config.InputType != "timeRange" {
+		config.Options = pkg.displays[defaultNation.ID][config.Name].optionsName
+	}
 
 	for id := range pkg.savedIds {
 		curDisplay := pkg.displays[id][config.Name]
