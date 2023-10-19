@@ -3,7 +3,7 @@ module gitea.fcdm.top/lixuan/keen
 go 1.19
 
 require (
-	github.com/cnyjp/fcdmpublic v0.0.5
+	github.com/cnyjp/fcdmpublic v0.0.7
 	github.com/fatih/color v1.15.0
 	golang.org/x/sys v0.12.0
 )
