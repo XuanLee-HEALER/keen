@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/user"
 	"strings"
 )
 
@@ -37,6 +38,7 @@ func (p ProcessStatus) String() string {
 	return fmt.Sprintf("PID: %s\nCommand: %s\nState: %s\nStateDescription: %s\nPPID: %s\nProcessGroup: %s", p.PID, p.Command, p.State, p.StateDesc, p.PPID, p.PGrpID)
 }
 
+// StatusProcess 查询指定pid对应的进程状态，信息来源为/proc/<pid>/stat文件
 func StatusProcess(pid string) (ProcessStatus, error) {
 	res := ProcessStatus{}
 	path := fmt.Sprintf("/proc/%s/stat", pid)
@@ -60,4 +62,18 @@ func StatusProcess(pid string) (ProcessStatus, error) {
 	res.PGrpID = segs[4]
 
 	return res, nil
+}
+
+// UidGid 获取指定用户名对应的UID和GID
+func UidGid(username string) (string, string, error) {
+	u, err := user.Lookup(username)
+	if err != nil {
+		return "", "", err
+	}
+
+	if u == nil {
+		return "", "", fmt.Errorf("user %s is nil", username)
+	}
+
+	return u.Uid, u.Gid, nil
 }
