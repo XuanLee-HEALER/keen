@@ -216,3 +216,15 @@ func IsSubDir(dir string, sub string) bool {
 
 	return strings.HasPrefix(sub, dir)
 }
+
+// CreateDirAs 指定uid、gid创建目录，此处uid和gid来源必须合法
+func CreateDirAs(dir string, uid, gid string) error {
+	err := os.MkdirAll(dir, os.ModeDir|0700)
+	if err != nil {
+		return err
+	}
+
+	iuid, _ := strconv.Atoi(uid)
+	igid, _ := strconv.Atoi(gid)
+	return os.Chown(dir, iuid, igid)
+}

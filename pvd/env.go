@@ -74,7 +74,7 @@ func (arg FCDMArgument) IsSyncDistributeInstance() bool {
 	return arg.JobType == model.JOB_TYPE_BACKUP && arg.JobStep == model.JOB_STEP_INIT
 }
 
-// GetConfig 获取配置项的值
+// GetConfig 获取配置项的值，如果是非编码值可以忽略错误
 func (arg FCDMArgument) GetConfig(configName string, isEncode bool, decode func(str string) (string, error)) (string, error) {
 	v := arg.Configs[model.FCDM_EV_AD_PREFIX+configName]
 	if isEncode {
@@ -83,7 +83,7 @@ func (arg FCDMArgument) GetConfig(configName string, isEncode bool, decode func(
 	return v, nil
 }
 
-// GetImgConfig 获取镜像配置项的值
+// GetImgConfig 获取镜像配置项的值，如果是非编码值可以忽略错误
 func (arg FCDMArgument) GetImgConfig(imageConfigName string, isEncode bool, decode func(str string) (string, error)) (string, error) {
 	v := arg.ImageConfigs[model.FCDM_EV_IMAGE_AD_PREFIX+imageConfigName]
 	if isEncode {
@@ -92,7 +92,7 @@ func (arg FCDMArgument) GetImgConfig(imageConfigName string, isEncode bool, deco
 	return v, nil
 }
 
-// GetCompatConfig 获取镜像配置覆盖普通配置之后的配置项的值
+// GetCompatConfig 获取镜像配置覆盖普通配置之后的配置项的值，只覆盖有效值值，即镜像配置不为空字符串的值，如果是非编码值可以忽略错误
 func (arg FCDMArgument) GetCompatConfig(configName string, isEncode bool, decode func(str string) (string, error)) (string, error) {
 	v, err := arg.GetConfig(configName, isEncode, decode)
 	if err != nil {

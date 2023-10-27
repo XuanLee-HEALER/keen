@@ -3,10 +3,13 @@
 package nix
 
 import (
+	"bufio"
+	"container/list"
 	"fmt"
 	"io"
 	"os"
 	"os/user"
+	"strconv"
 	"strings"
 )
 
@@ -76,4 +79,30 @@ func UidGid(username string) (string, string, error) {
 	}
 
 	return u.Uid, u.Gid, nil
+}
+
+type MemInfo *list.List
+type MemSeg struct {
+	Start uint64
+	End   uint64
+	Usage string
+}
+
+func StatusSystemMemory() (MemInfo, error) {
+	f, err := os.Open("/proc/iomem")
+	if err != nil {
+		return nil, err
+	}
+
+	recToSeg := func(t string) MemSeg {
+		segs := strings.Split(t, " : ")
+		subsegs := strings.Split(segs[0], "-")
+		s, _ := strconv.ParseUint(subsegs[0], 16, 64)
+		e, _ := strconv.ParseUint(subsegs[1], 16, 64)
+		return MemSeg{s, e, segs[1]}
+	}
+
+	scanner := bufio.NewScanner()
+
+	return nil, nil
 }
