@@ -7,8 +7,10 @@ import (
 )
 
 func TestStatusSystemMemory(t *testing.T) {
-	_, err := nix.StatusSystemMemory()
+	res, err := nix.StatusSystemMemory()
 	if err != nil {
 		t.Error(err)
 	}
+	t.Log("total memory: ", nix.TotalMemory(res))
+	t.Logf("total memory: %.2f", float64(nix.TotalMemory(res))/1024/1024/1024)
 }

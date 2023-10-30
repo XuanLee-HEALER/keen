@@ -4,13 +4,14 @@ package nix
 
 import (
 	"bufio"
-	"container/list"
 	"fmt"
 	"io"
 	"os"
 	"os/user"
 	"strconv"
 	"strings"
+
+	"gitea.fcdm.top/lixuan/keen/datastructure"
 )
 
 var processStateDescription map[string]string = map[string]string{
@@ -81,28 +82,112 @@ func UidGid(username string) (string, string, error) {
 	return u.Uid, u.Gid, nil
 }
 
-type MemInfo *list.List
 type MemSeg struct {
+	Layer int
 	Start uint64
 	End   uint64
 	Usage string
+	Sub   []MemSeg
 }
 
-func StatusSystemMemory() (MemInfo, error) {
+func prefixStr(pre string, seg MemSeg) string {
+	strb := strings.Builder{}
+	strb.WriteString(fmt.Sprintf("%sstart: 0x%09x end: 0x%09x usage: %s", pre, seg.Start, seg.End, seg.Usage))
+	for _, m := range seg.Sub {
+		strb.WriteString("\n")
+		strb.WriteString(prefixStr(pre+"\t", m))
+	}
+	return strb.String()
+}
+
+func (seg MemSeg) String() string {
+	return prefixStr("", seg)
+}
+
+func StatusSystemMemory() ([]*MemSeg, error) {
 	f, err := os.Open("/proc/iomem")
 	if err != nil {
 		return nil, err
 	}
+	defer f.Close()
 
 	recToSeg := func(t string) MemSeg {
+		ct := 0
+		for _, r := range t {
+			if r == ' ' {
+				ct++
+			} else {
+				break
+			}
+		}
+		ly := ct / 2
+		t = t[ct:]
 		segs := strings.Split(t, " : ")
 		subsegs := strings.Split(segs[0], "-")
 		s, _ := strconv.ParseUint(subsegs[0], 16, 64)
 		e, _ := strconv.ParseUint(subsegs[1], 16, 64)
-		return MemSeg{s, e, segs[1]}
+		return MemSeg{ly, s, e, segs[1], nil}
 	}
 
-	scanner := bufio.NewScanner()
+	merge := func(l int, sck *datastructure.Stack) int {
+		curl := sck.Peek().(*MemSeg).Layer
+		for curl > l {
+			tarr := make([]MemSeg, 0)
+			for {
+				e1 := sck.Remove().(*MemSeg)
+				e2 := sck.Peek().(*MemSeg)
+				if e1.Layer == e2.Layer {
+					tarr = append(tarr, *e1)
+					continue
+				} else if e1.Layer > e2.Layer {
+					tarr = append(tarr, *e1)
+					for i, j := 0, len(tarr)-1; i < j; i, j = i+1, j-1 {
+						tarr[i], tarr[j] = tarr[j], tarr[i]
+					}
+					e2.Sub = tarr
+					curl = e2.Layer
+					break
+				}
+			}
+		}
+		return curl
+	}
 
-	return nil, nil
+	res := make([]*MemSeg, 0)
+	sck := datastructure.NewStack()
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		ln := scanner.Text()
+		seg := recToSeg(ln)
+		h := sck.Peek()
+		if h == nil {
+			sck.Push(&seg)
+		} else {
+			if old := h.(*MemSeg).Layer; old < seg.Layer {
+				sck.Push(&seg)
+			} else if old == seg.Layer {
+				if old == 0 {
+					res = append(res, sck.Remove().(*MemSeg))
+					sck.Push(&seg)
+				} else {
+					sck.Push(&seg)
+				}
+			} else if old > seg.Layer {
+				old = merge(seg.Layer, &sck)
+				if old == 0 {
+					res = append(res, sck.Remove().(*MemSeg))
+				}
+				sck.Push(&seg)
+			}
+		}
+	}
+
+	merge(0, &sck)
+	res = append(res, sck.Remove().(*MemSeg))
+
+	return res, nil
+}
+
+func TotalMemory(seg []*MemSeg) uint64 {
+	return seg[len(seg)-1].End
 }
