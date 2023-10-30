@@ -6,7 +6,7 @@ import (
 	"syscall"
 )
 
-// ExecCmd 执行命令
+// ExecCmd 执行命令，返回顺序为标准输出、标准错误和执行错误对象
 func ExecCmd(path string,
 	args []string,
 	envs map[string]string,
@@ -89,7 +89,7 @@ func ExecCmd(path string,
 	}
 
 	if err := cmd.Wait(); err != nil {
-		return nil, nil, err
+		return outbs, errbs, err
 	} else {
 		return outbs, errbs, nil
 	}
