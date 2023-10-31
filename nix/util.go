@@ -1,7 +1,9 @@
 package nix
 
 import (
+	"io/fs"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"syscall"
 )
@@ -93,4 +95,23 @@ func ExecCmd(path string,
 	} else {
 		return outbs, errbs, nil
 	}
+}
+
+// DirSize 计算目录所有文件总大小
+func DirSize(root string) (uint64, error) {
+	var total uint64
+	return total, filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if path == root {
+			return nil
+		}
+		if !d.IsDir() {
+			fi, xerr := d.Info()
+			if xerr != nil {
+				return xerr
+			}
+			total += uint64(fi.Size())
+		}
+
+		return nil
+	})
 }
