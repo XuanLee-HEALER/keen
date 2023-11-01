@@ -9,6 +9,7 @@ import (
 // Runner 发现出来的应用
 type Runner interface {
 	ToFCDMApplication() model.Application
+	ToFCDMApplicationConfigs() []model.ConfigConfig
 	Backup() (Holder, error)
 	Restore(Holder) error
 	Mount(Holder) error
