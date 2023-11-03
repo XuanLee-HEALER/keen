@@ -1,4 +1,5 @@
-// go:build windows
+//go:build windows
+// +build windows
 
 package ysys_test
 
@@ -8,8 +9,8 @@ import (
 	"time"
 
 	"gitea.fcdm.top/lixuan/keen/datastructure"
-	"gitea.fcdm.top/lixuan/keen/win"
 	"gitea.fcdm.top/lixuan/keen/ylog"
+	"gitea.fcdm.top/lixuan/keen/ysys"
 )
 
 func initI() {
@@ -20,11 +21,11 @@ func initI() {
 		FileLogDir:      "C:\\tlog",
 		FileClean:       3 * time.Second,
 	}
-	win.SetupLogger(logger.InitLogger())
+	ysys.SetupLogger(logger.InitLogger())
 }
 
 func TestPSVersionTable(t *testing.T) {
-	v, err := win.PSVersionTable()
+	v, err := ysys.PSVersionTable()
 	if err != nil {
 		t.Fatalf("failed to fetch powershell version: %v", err)
 	}
@@ -37,12 +38,12 @@ func print(obj any, t *testing.T) {
 }
 
 func TestHostComputerInfo(t *testing.T) {
-	err := win.SetupPowerShellVersion()
+	err := ysys.SetupPowerShellVersion()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	computerInfo, err := win.HostComputerInfo()
+	computerInfo, err := ysys.HostComputerInfo()
 	if err != nil {
 		t.Fatalf("failed to retrieve computer information: %v", err)
 	}
@@ -51,7 +52,7 @@ func TestHostComputerInfo(t *testing.T) {
 }
 
 func TestServiceByFilter(t *testing.T) {
-	err := win.SetupPowerShellVersion()
+	err := ysys.SetupPowerShellVersion()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +64,7 @@ func TestServiceByFilter(t *testing.T) {
 
 	for _, cond := range conds {
 		t.Log("current condition: ", cond)
-		services, err := win.ServiceByFilter(cond)
+		services, err := ysys.ServiceByFilter(cond)
 		if err != nil {
 			t.Errorf("failed to retrieve service information: %v", err)
 		}
@@ -75,7 +76,7 @@ func TestServiceByFilter(t *testing.T) {
 }
 
 func TestProcessInfoByFilter(t *testing.T) {
-	err := win.SetupPowerShellVersion()
+	err := ysys.SetupPowerShellVersion()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +87,7 @@ func TestProcessInfoByFilter(t *testing.T) {
 
 	for _, cond := range conds {
 		t.Log("current condition: ", cond)
-		processes, err := win.ProcessInfoByFilter(cond)
+		processes, err := ysys.ProcessInfoByFilter(cond)
 		if err != nil {
 			t.Errorf("failed to retrieve service information: %v", err)
 		}
@@ -98,12 +99,12 @@ func TestProcessInfoByFilter(t *testing.T) {
 }
 
 func TestSQLServerProductId(t *testing.T) {
-	err := win.SetupPowerShellVersion()
+	err := ysys.SetupPowerShellVersion()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	prod, err := win.SQLServerProductId(1460)
+	prod, err := ysys.SQLServerProductId(1460)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +112,7 @@ func TestSQLServerProductId(t *testing.T) {
 }
 
 func TestVolumeInfoByPath(t *testing.T) {
-	err := win.SetupPowerShellVersion()
+	err := ysys.SetupPowerShellVersion()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +122,7 @@ func TestVolumeInfoByPath(t *testing.T) {
 	ps := []string{p1, p2}
 
 	for _, p := range ps {
-		vol, err := win.VolumeInfoByPath(p)
+		vol, err := ysys.VolumeInfoByPath(p)
 		if err != nil {
 			t.Errorf("failed to fetch volume information: %v", err)
 		}
@@ -131,7 +132,7 @@ func TestVolumeInfoByPath(t *testing.T) {
 }
 
 func TestListening(t *testing.T) {
-	err := win.SetupPowerShellVersion()
+	err := ysys.SetupPowerShellVersion()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +141,7 @@ func TestListening(t *testing.T) {
 	ps := []uint{p1, p2}
 
 	for _, p := range ps {
-		info, err := win.Listening(p)
+		info, err := ysys.Listening(p)
 		if err != nil {
 			t.Errorf("failed to fetch tcp information: %v", err)
 		}
@@ -150,12 +151,12 @@ func TestListening(t *testing.T) {
 }
 
 func TestDriveLetters(t *testing.T) {
-	err := win.SetupPowerShellVersion()
+	err := ysys.SetupPowerShellVersion()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	drivers, err := win.DriveLetters()
+	drivers, err := ysys.DriveLetters()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +170,7 @@ func TestDriveLetters(t *testing.T) {
 		}
 	}
 
-	avail := win.AvailableLetter(driverSet)
+	avail := ysys.AvailableLetter(driverSet)
 
 	t.Log("avail", string(avail))
 }
