@@ -1,7 +1,7 @@
 //go:build windows
 // +build windows
 
-package ysys_test
+package util_test
 
 import (
 	"encoding/json"

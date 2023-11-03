@@ -1,16 +1,16 @@
 //go:build aix || darwin || linux
 // +build aix darwin linux
 
-package ysys_test
+package util_test
 
 import (
 	"testing"
 
-	"gitea.fcdm.top/lixuan/keen/ysys"
+	"gitea.fcdm.top/lixuan/keen/util"
 )
 
 func TestStatusProcess(t *testing.T) {
-	res, err := ysys.QueryProcess("382015")
+	res, err := util.QueryProcess("382015")
 	if err != nil {
 		t.Error("error: ", err)
 	}
@@ -18,7 +18,7 @@ func TestStatusProcess(t *testing.T) {
 }
 
 func TestStatusSystemMemory(t *testing.T) {
-	res, err := ysys.QuerySystemMemory()
+	res, err := util.QuerySystemMemory()
 	if err != nil {
 		t.Error(err)
 	}

@@ -1,7 +1,7 @@
 //go:build windows
 // +build windows
 
-package ysys
+package util
 
 import (
 	"bufio"

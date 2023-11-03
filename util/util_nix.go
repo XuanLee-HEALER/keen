@@ -1,7 +1,7 @@
 //go:build aix || darwin || linux
 // +build aix darwin linux
 
-package ysys
+package util
 
 import (
 	"bufio"
