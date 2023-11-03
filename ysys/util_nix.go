@@ -7,11 +7,8 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"os/exec"
-	"os/user"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -73,20 +70,6 @@ func QueryProcess(pid string) (ProcessStat, error) {
 	return res, nil
 }
 
-// UidGid 获取指定用户名对应的UID和GID
-func UidGid(username string) (string, string, error) {
-	u, err := user.Lookup(username)
-	if err != nil {
-		return "", "", err
-	}
-
-	if u == nil {
-		return "", "", fmt.Errorf("user %s is nil", username)
-	}
-
-	return u.Uid, u.Gid, nil
-}
-
 type MemSeg struct {
 	Layer int
 	Start uint64
@@ -109,8 +92,8 @@ func (seg MemSeg) String() string {
 	return prefixStr("", seg)
 }
 
-// StatusSystemMemory 获取操作系统内存分配信息，源数据为/proc/iomem信息
-func StatusSystemMemory() ([]*MemSeg, error) {
+// QuerySystemMemory 获取操作系统内存分配信息，源数据为/proc/iomem信息
+func QuerySystemMemory() ([]*MemSeg, error) {
 	f, err := os.Open("/proc/iomem")
 	if err != nil {
 		return nil, err
@@ -192,10 +175,6 @@ func StatusSystemMemory() ([]*MemSeg, error) {
 	res = append(res, sck.Remove().(*MemSeg))
 
 	return res, nil
-}
-
-func TotalMemory(seg []*MemSeg) uint64 {
-	return seg[len(seg)-1].End
 }
 
 // ExecCmd 执行命令，返回顺序为标准输出、标准错误和执行错误对象
@@ -285,23 +264,4 @@ func ExecCmd(path string,
 	} else {
 		return outbs, errbs, nil
 	}
-}
-
-// DirSize 计算目录所有文件总大小
-func DirSize(root string) (uint64, error) {
-	var total uint64
-	return total, filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if path == root {
-			return nil
-		}
-		if !d.IsDir() {
-			fi, xerr := d.Info()
-			if xerr != nil {
-				return xerr
-			}
-			total += uint64(fi.Size())
-		}
-
-		return nil
-	})
 }

@@ -1,6 +1,7 @@
 package util
 
 import (
+	"fmt"
 	"runtime"
 
 	"gitea.fcdm.top/lixuan/keen"
@@ -47,5 +48,21 @@ func Processe(pid string) (ProcessInfo, error) {
 
 	}
 
+	return res, nil
+}
+
+func TotalMemory() (uint64, error) {
+	var res uint64
+	if isNix() {
+		mem, err := ysys.QuerySystemMemory()
+		if err != nil {
+			keen.Logger.Println(ylog.ERROR, fmt.Sprintf("failed to query memory detail: %v", err))
+			return res, err
+		}
+		res = mem[len(mem)-1].End
+	}
+	if isWin() {
+
+	}
 	return res, nil
 }

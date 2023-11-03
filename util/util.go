@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"math"
 	"os"
 	"os/user"
@@ -227,4 +228,37 @@ func CreateDirAs(dir string, uid, gid string) error {
 	iuid, _ := strconv.Atoi(uid)
 	igid, _ := strconv.Atoi(gid)
 	return os.Chown(dir, iuid, igid)
+}
+
+// DirSize 计算目录所有文件总大小
+func DirSize(root string) (uint64, error) {
+	var total uint64
+	return total, filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if path == root {
+			return nil
+		}
+		if !d.IsDir() {
+			fi, xerr := d.Info()
+			if xerr != nil {
+				return xerr
+			}
+			total += uint64(fi.Size())
+		}
+
+		return nil
+	})
+}
+
+// UidGid 获取指定用户名对应的UID和GID
+func UidGid(username string) (string, string, error) {
+	u, err := user.Lookup(username)
+	if err != nil {
+		return "", "", err
+	}
+
+	if u == nil {
+		return "", "", fmt.Errorf("user %s is nil", username)
+	}
+
+	return u.Uid, u.Gid, nil
 }
