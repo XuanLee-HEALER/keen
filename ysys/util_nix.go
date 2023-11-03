@@ -1,4 +1,6 @@
-package nix
+// go:build aix darwin linux
+
+package ysys
 
 import (
 	"io/fs"

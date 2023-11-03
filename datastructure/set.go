@@ -17,6 +17,12 @@ func (set Set[T]) Add(t T) {
 	set[t] = struct{}{}
 }
 
+func (set Set[T]) AddList(ts []T) {
+	for _, t := range ts {
+		set.Add(t)
+	}
+}
+
 func (set Set[T]) ToSlice() []T {
 	res := make([]T, 0, len(set))
 	for k := range set {

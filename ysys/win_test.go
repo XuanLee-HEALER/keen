@@ -1,14 +1,35 @@
-//go:build windows
+// go:build windows
 
-package win_test
+package ysys_test
 
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"gitea.fcdm.top/lixuan/keen/datastructure"
 	"gitea.fcdm.top/lixuan/keen/win"
+	"gitea.fcdm.top/lixuan/keen/ylog"
 )
+
+func initI() {
+	logger := ylog.YLogger{
+		ConsoleLevel:    ylog.Trace,
+		ConsoleColorful: true,
+		FileLog:         true,
+		FileLogDir:      "C:\\tlog",
+		FileClean:       3 * time.Second,
+	}
+	win.SetupLogger(logger.InitLogger())
+}
+
+func TestPSVersionTable(t *testing.T) {
+	v, err := win.PSVersionTable()
+	if err != nil {
+		t.Fatalf("failed to fetch powershell version: %v", err)
+	}
+	t.Log("version:", v)
+}
 
 func print(obj any, t *testing.T) {
 	bs, _ := json.MarshalIndent(obj, "", "  ")

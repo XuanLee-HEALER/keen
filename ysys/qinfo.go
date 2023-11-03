@@ -1,6 +1,6 @@
-// go:build linux amd64
+// go:build aix darwin linux
 
-package nix
+package ysys
 
 import (
 	"bufio"
@@ -104,6 +104,7 @@ func (seg MemSeg) String() string {
 	return prefixStr("", seg)
 }
 
+// StatusSystemMemory 获取操作系统内存分配信息，源数据为/proc/iomem信息
 func StatusSystemMemory() ([]*MemSeg, error) {
 	f, err := os.Open("/proc/iomem")
 	if err != nil {
