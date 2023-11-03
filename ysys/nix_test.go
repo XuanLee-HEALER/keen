@@ -10,7 +10,7 @@ import (
 )
 
 func TestStatusProcess(t *testing.T) {
-	res, err := ysys.StatusProcess("382015")
+	res, err := ysys.QueryProcess("382015")
 	if err != nil {
 		t.Error("error: ", err)
 	}

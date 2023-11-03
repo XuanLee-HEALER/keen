@@ -34,7 +34,7 @@ var processStateDescription map[string]string = map[string]string{
 	"I": "Idle (Linux 4.14 onward)",
 }
 
-type ProcessStatus struct {
+type ProcessStat struct {
 	PID       string
 	Command   string
 	State     string
@@ -43,13 +43,13 @@ type ProcessStatus struct {
 	PGrpID    string
 }
 
-func (p ProcessStatus) String() string {
+func (p ProcessStat) String() string {
 	return fmt.Sprintf("PID: %s\nCommand: %s\nState: %s\nStateDescription: %s\nPPID: %s\nProcessGroup: %s", p.PID, p.Command, p.State, p.StateDesc, p.PPID, p.PGrpID)
 }
 
-// StatusProcess 查询指定pid对应的进程状态，信息来源为/proc/<pid>/stat文件
-func StatusProcess(pid string) (ProcessStatus, error) {
-	res := ProcessStatus{}
+// queryProcess 查询指定pid对应的进程状态，源数据为/proc/<pid>/stat文件
+func QueryProcess(pid string) (ProcessStat, error) {
+	res := ProcessStat{}
 	path := fmt.Sprintf("/proc/%s/stat", pid)
 	f, err := os.Open(path)
 	if err != nil {

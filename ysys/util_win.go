@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	glog "log"
 	"os/exec"
 	"sort"
@@ -21,8 +22,6 @@ import (
 	"gitea.fcdm.top/lixuan/keen/ylog"
 	"golang.org/x/sys/windows/registry"
 )
-
-var log *glog.Logger
 
 type PSVersion uint
 
