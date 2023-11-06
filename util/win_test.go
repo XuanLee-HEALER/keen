@@ -5,27 +5,17 @@ package util_test
 
 import (
 	"encoding/json"
+	"os/exec"
+	"path/filepath"
 	"testing"
-	"time"
 
 	"gitea.fcdm.top/lixuan/keen/datastructure"
-	"gitea.fcdm.top/lixuan/keen/ylog"
-	"gitea.fcdm.top/lixuan/keen/ysys"
+	"gitea.fcdm.top/lixuan/keen/util"
+	"golang.org/x/sys/windows/registry"
 )
 
-func initI() {
-	logger := ylog.YLogger{
-		ConsoleLevel:    ylog.Trace,
-		ConsoleColorful: true,
-		FileLog:         true,
-		FileLogDir:      "C:\\tlog",
-		FileClean:       3 * time.Second,
-	}
-	ysys.SetupLogger(logger.InitLogger())
-}
-
 func TestPSVersionTable(t *testing.T) {
-	v, err := ysys.PSVersionTable()
+	v, err := util.PSVersionTable()
 	if err != nil {
 		t.Fatalf("failed to fetch powershell version: %v", err)
 	}
@@ -38,12 +28,12 @@ func print(obj any, t *testing.T) {
 }
 
 func TestHostComputerInfo(t *testing.T) {
-	err := ysys.SetupPowerShellVersion()
+	err := util.SetupPowerShellVersion()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	computerInfo, err := ysys.HostComputerInfo()
+	computerInfo, err := util.HostComputerInfo()
 	if err != nil {
 		t.Fatalf("failed to retrieve computer information: %v", err)
 	}
@@ -52,7 +42,7 @@ func TestHostComputerInfo(t *testing.T) {
 }
 
 func TestServiceByFilter(t *testing.T) {
-	err := ysys.SetupPowerShellVersion()
+	err := util.SetupPowerShellVersion()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +54,7 @@ func TestServiceByFilter(t *testing.T) {
 
 	for _, cond := range conds {
 		t.Log("current condition: ", cond)
-		services, err := ysys.ServiceByFilter(cond)
+		services, err := util.ServiceByFilter(cond)
 		if err != nil {
 			t.Errorf("failed to retrieve service information: %v", err)
 		}
@@ -76,7 +66,7 @@ func TestServiceByFilter(t *testing.T) {
 }
 
 func TestProcessInfoByFilter(t *testing.T) {
-	err := ysys.SetupPowerShellVersion()
+	err := util.SetupPowerShellVersion()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +77,7 @@ func TestProcessInfoByFilter(t *testing.T) {
 
 	for _, cond := range conds {
 		t.Log("current condition: ", cond)
-		processes, err := ysys.ProcessInfoByFilter(cond)
+		processes, err := util.ProcessInfoByFilter(cond)
 		if err != nil {
 			t.Errorf("failed to retrieve service information: %v", err)
 		}
@@ -99,12 +89,12 @@ func TestProcessInfoByFilter(t *testing.T) {
 }
 
 func TestSQLServerProductId(t *testing.T) {
-	err := ysys.SetupPowerShellVersion()
+	err := util.SetupPowerShellVersion()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	prod, err := ysys.SQLServerProductId(1460)
+	prod, err := util.SQLServerProductId(1460)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +102,7 @@ func TestSQLServerProductId(t *testing.T) {
 }
 
 func TestVolumeInfoByPath(t *testing.T) {
-	err := ysys.SetupPowerShellVersion()
+	err := util.SetupPowerShellVersion()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +112,7 @@ func TestVolumeInfoByPath(t *testing.T) {
 	ps := []string{p1, p2}
 
 	for _, p := range ps {
-		vol, err := ysys.VolumeInfoByPath(p)
+		vol, err := util.VolumeInfoByPath(p)
 		if err != nil {
 			t.Errorf("failed to fetch volume information: %v", err)
 		}
@@ -132,7 +122,7 @@ func TestVolumeInfoByPath(t *testing.T) {
 }
 
 func TestListening(t *testing.T) {
-	err := ysys.SetupPowerShellVersion()
+	err := util.SetupPowerShellVersion()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +131,7 @@ func TestListening(t *testing.T) {
 	ps := []uint{p1, p2}
 
 	for _, p := range ps {
-		info, err := ysys.Listening(p)
+		info, err := util.Listening(p)
 		if err != nil {
 			t.Errorf("failed to fetch tcp information: %v", err)
 		}
@@ -151,12 +141,12 @@ func TestListening(t *testing.T) {
 }
 
 func TestDriveLetters(t *testing.T) {
-	err := ysys.SetupPowerShellVersion()
+	err := util.SetupPowerShellVersion()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	drivers, err := ysys.DriveLetters()
+	drivers, err := util.DriveLetters()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +160,34 @@ func TestDriveLetters(t *testing.T) {
 		}
 	}
 
-	avail := ysys.AvailableLetter(driverSet)
+	avail := util.AvailableLetter(driverSet)
 
 	t.Log("avail", string(avail))
+}
+
+func TestStringRegVal(t *testing.T) {
+	const (
+		NBU_PATH    = "SOFTWARE\\Veritas\\NetBackup\\CurrentVersion"
+		NBU_CONFIG  = "SOFTWARE\\Veritas\\NetBackup\\CurrentVersion\\Config"
+		NBU_INIPATH = "INI Directory"
+		NBU_MASTER  = "EMMSERVER"
+	)
+	res, err := util.StringRegVal(registry.LOCAL_MACHINE, NBU_CONFIG, registry.QUERY_VALUE, NBU_MASTER)
+	if err != nil {
+		t.Errorf("failed to get master server: %v", err)
+	}
+	t.Logf("the hostname of master server: %v", res[0])
+
+	res, err = util.StringRegVal(registry.LOCAL_MACHINE, NBU_PATH, registry.QUERY_VALUE, NBU_INIPATH)
+	if err != nil {
+		t.Errorf("failed to get nbu home: %v", err)
+	}
+	t.Logf("the hostname of nbu home: %v", res[0])
+
+	cmd := exec.Command(filepath.Join(res[0], "bin", "bplist"))
+	bs, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Error(err)
+	}
+	t.Log(string(bs))
 }

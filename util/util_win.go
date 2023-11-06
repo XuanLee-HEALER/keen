@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	glog "log"
 	"os/exec"
 	"sort"
 	"strconv"
@@ -18,7 +17,6 @@ import (
 
 	"gitea.fcdm.top/lixuan/keen/datastructure"
 	"gitea.fcdm.top/lixuan/keen/fp"
-	"gitea.fcdm.top/lixuan/keen/util"
 	"gitea.fcdm.top/lixuan/keen/ylog"
 	"golang.org/x/sys/windows/registry"
 )
@@ -41,19 +39,6 @@ const (
 
 var currentPSVer PSVersion
 var ErrUnsupportedPSVersion error = errors.New("unsupported powershell version")
-
-func SetupLogger(xlog *glog.Logger) {
-	if xlog != nil {
-		log = xlog
-	} else {
-		il := ylog.YLogger{
-			ConsoleLevel:    ylog.Trace,
-			ConsoleColorful: true,
-			FileLog:         false,
-		}
-		log = il.InitLogger()
-	}
-}
 
 func SetupPowerShellVersion() error {
 	v, err := PSVersionTable()
@@ -202,7 +187,7 @@ func HostComputerInfo() (ComputerInfo, error) {
 		if err != nil {
 			return comp, err
 		}
-		sysinfo := util.ReadListOutput(bs)
+		sysinfo := ReadListOutput(bs)
 
 		if len(sysinfo) <= 0 {
 			return comp, ErrPSObjectNotFound
@@ -260,7 +245,7 @@ func ServiceByFilter(filterStr string) ([]ServiceInfo, error) {
 		}
 
 		serviceInfos := make([]ServiceInfo, 0)
-		svcInfos := util.ReadListOutput(bs)
+		svcInfos := ReadListOutput(bs)
 		if len(svcInfos) <= 0 {
 			return serviceInfos, ErrPSObjectNotFound
 		} else {
@@ -323,7 +308,7 @@ func ProcessInfoByFilter(filterStr string) ([]ProcessInfo, error) {
 		}
 
 		processInfos := make([]ProcessInfo, 0)
-		procInfos := util.ReadListOutput(bs)
+		procInfos := ReadListOutput(bs)
 		if len(procInfos) <= 0 {
 			return processInfos, ErrPSObjectNotFound
 		} else {
@@ -379,7 +364,7 @@ func SQLServerProductId(pid uint) (ProductVersionInfo, error) {
 			return productVerInfo, err
 		}
 
-		prodInfos := util.ReadListOutput(bs)
+		prodInfos := ReadListOutput(bs)
 		if len(prodInfos) <= 0 {
 			return productVerInfo, ErrPSObjectNotFound
 		}
@@ -416,7 +401,7 @@ func VolumeInfoByPath(path string) (VolumeInfo, error) {
 		}
 
 		driverToId := make(map[string]string)
-		driverInfos := util.ReadListOutput(bs)
+		driverInfos := ReadListOutput(bs)
 
 		for _, info := range driverInfos {
 			var cap, dev string
@@ -433,7 +418,7 @@ func VolumeInfoByPath(path string) (VolumeInfo, error) {
 
 		drivers := make([]string, 0)
 		for k := range driverToId {
-			if util.IsSubDir(k, path) {
+			if IsSubDir(k, path) {
 				drivers = append(drivers, k)
 			}
 		}
@@ -456,7 +441,7 @@ func VolumeInfoByPath(path string) (VolumeInfo, error) {
 			return volumeInfo, err
 		}
 
-		volIds := util.ReadListOutput(bs)
+		volIds := ReadListOutput(bs)
 		if len(volIds) <= 0 {
 			return volumeInfo, ErrPSObjectNotFound
 		}
@@ -501,10 +486,10 @@ func Listening(pid uint) ([]TcpInfo, error) {
 		for scanner.Scan() {
 			line := scanner.Text()
 			if line != "" {
-				line = strings.TrimFunc(line, util.TrimSpace)
+				line = strings.TrimFunc(line, TrimSpace)
 				line = strings.ReplaceAll(line, "\t", " ")
 				segs := strings.Split(line, " ")
-				segs = fp.Map[string, string](segs, func(e string) string { return strings.TrimFunc(e, util.TrimSpace) })
+				segs = fp.Map[string, string](segs, func(e string) string { return strings.TrimFunc(e, TrimSpace) })
 				segs = fp.Filter[string](segs, func(e string) bool { return e != "" })
 				if segs[3] == "LISTENING" {
 					tcpInfo := TcpInfo{}
@@ -538,6 +523,8 @@ func Listening(pid uint) ([]TcpInfo, error) {
 }
 
 // StringRegVal 获取注册表下指定key的注册表项的值
+//
+// regK 注册表已有key | path key下的路径 | access 访问权限
 func StringRegVal(regK registry.Key, path string, access uint32, ks ...string) ([]string, error) {
 	res := make([]string, 0)
 
@@ -602,7 +589,7 @@ func DriveLetters() ([]DriverInfo, error) {
 		}
 
 		driverInfos := make([]DriverInfo, 0)
-		driverList := util.ReadListOutput(bs)
+		driverList := ReadListOutput(bs)
 		if len(driverList) <= 0 {
 			return driverInfos, ErrPSObjectNotFound
 		} else {
