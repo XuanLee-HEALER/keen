@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"gitea.fcdm.top/lixuan/keen/fp"
 )
 
 var TrimSpace = func(r rune) bool { return r == ' ' || r == '\t' }
@@ -232,21 +234,20 @@ func CreateDirAs(dir string, uid, gid string) error {
 
 // DirSize 计算目录所有文件总大小
 func DirSize(root string) (uint64, error) {
-	var total uint64
-	return total, filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if path == root {
-			return nil
+	rs, err := IterDirWithVal[uint64](root, func(s string, de fs.DirEntry) bool { return de.IsDir() }, func(s string, de fs.DirEntry) (uint64, error) {
+		info, err := de.Info()
+		if err != nil {
+			return 0, err
+		} else {
+			return uint64(info.Size()), nil
 		}
-		if !d.IsDir() {
-			fi, xerr := d.Info()
-			if xerr != nil {
-				return xerr
-			}
-			total += uint64(fi.Size())
-		}
-
-		return nil
 	})
+	if err != nil {
+		return 0, err
+	}
+
+	r, _ := fp.Reduce[uint64](rs, func(e1, e2 uint64) uint64 { return e1 + e2 })
+	return r, nil
 }
 
 // UidGid 获取指定用户名对应的UID和GID
@@ -261,4 +262,49 @@ func UidGid(username string) (string, string, error) {
 	}
 
 	return u.Uid, u.Gid, nil
+}
+
+// IterDir 遍历目录，执行函数
+func IterDir(path string, filter func(string, fs.DirEntry) bool, f func(string, fs.DirEntry) error) error {
+	return filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if filter(path, d) {
+			return nil
+		}
+
+		err = f(path, d)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
+// IterDirWithVal 遍历目录，执行函数，收集函数执行结果并返回
+func IterDirWithVal[T any](path string, filter func(string, fs.DirEntry) bool, f func(string, fs.DirEntry) (T, error)) ([]T, error) {
+	res := make([]T, 0)
+
+	err := filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if filter(path, d) {
+			return nil
+		}
+
+		v, err := f(path, d)
+		if err != nil {
+			return err
+		}
+		res = append(res, v)
+
+		return nil
+	})
+
+	return res, err
 }
