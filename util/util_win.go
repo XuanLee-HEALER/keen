@@ -9,11 +9,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"gitea.fcdm.top/lixuan/keen/datastructure"
 	"gitea.fcdm.top/lixuan/keen/fp"
@@ -39,6 +41,25 @@ const (
 
 var currentPSVer PSVersion
 var ErrUnsupportedPSVersion error = errors.New("unsupported powershell version")
+
+func Fsync(dir string) error {
+	return IterDir(dir, func(s string, de fs.DirEntry) bool { return false }, func(s string, de fs.DirEntry) error {
+		p := s
+		wm := syscall.O_RDWR
+		perm := de.Type().Perm()
+		f, err := syscall.Open(p, wm, uint32(perm))
+		if err != nil {
+			return err
+		}
+		defer syscall.Close(f)
+		err = syscall.Fsync(f)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
 
 func SetupPowerShellVersion() error {
 	v, err := PSVersionTable()

@@ -16,6 +16,10 @@ import (
 	"gitea.fcdm.top/lixuan/keen/datastructure"
 )
 
+func Sync(string) error {
+	return syscall.Sync()
+}
+
 var processStateDescription map[string]string = map[string]string{
 	"R": "Running",
 	"S": "Sleeping in an interruptible wait",
