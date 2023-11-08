@@ -16,8 +16,8 @@ import (
 	"gitea.fcdm.top/lixuan/keen/datastructure"
 )
 
-func Sync(_ string) error {
-	return syscall.Sync()
+func Sync(_ string) {
+	syscall.Sync()
 }
 
 var processStateDescription map[string]string = map[string]string{

@@ -17,6 +17,7 @@ import (
 	"strings"
 	"syscall"
 
+	"gitea.fcdm.top/lixuan/keen"
 	"gitea.fcdm.top/lixuan/keen/datastructure"
 	"gitea.fcdm.top/lixuan/keen/fp"
 	"gitea.fcdm.top/lixuan/keen/ylog"
@@ -42,8 +43,8 @@ const (
 var currentPSVer PSVersion
 var ErrUnsupportedPSVersion error = errors.New("unsupported powershell version")
 
-func Sync(dir string) error {
-	return IterDir(dir, func(s string, de fs.DirEntry) bool { return false }, func(s string, de fs.DirEntry) error {
+func Sync(dir string) {
+	err := IterDir(dir, func(s string, de fs.DirEntry) bool { return false }, func(s string, de fs.DirEntry) error {
 		p := s
 		wm := syscall.O_RDWR
 		perm := de.Type().Perm()
@@ -59,6 +60,10 @@ func Sync(dir string) error {
 
 		return nil
 	})
+
+	if err != nil {
+		keen.Logger.Println(ylog.ERROR, fmt.Sprintf("failed to sync filesystem buffer to disk: %v", err))
+	}
 }
 
 func SetupPowerShellVersion() error {
