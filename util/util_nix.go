@@ -16,7 +16,7 @@ import (
 	"gitea.fcdm.top/lixuan/keen/datastructure"
 )
 
-func Sync(string) error {
+func Sync(_ string) error {
 	return syscall.Sync()
 }
 
