@@ -23,6 +23,12 @@ func (set Set[T]) AddList(ts []T) {
 	}
 }
 
+func (set Set[T]) Merge(o Set[T]) {
+	for e := range o {
+		set.Add(e)
+	}
+}
+
 func (set Set[T]) ToSlice() []T {
 	res := make([]T, 0, len(set))
 	for k := range set {

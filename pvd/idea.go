@@ -14,6 +14,7 @@ type Runner interface {
 	Restore(Holder) error
 	Mount(Holder) error
 	Umount(Holder) error
+	UpdateConfig()
 }
 
 // Holder 应用制作出来的备份集/镜像，实质上Holder的内容就是备份集的元数据
