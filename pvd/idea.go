@@ -54,5 +54,5 @@ type BackupSetMetadata struct {
 	Comment   string    `json:"comment"`
 	StartTime time.Time `json:"start_time"`
 	EndTime   time.Time `json:"end_time"`
-	SpaceErr  error
+	SpaceErr  error     `json:"space_error"`
 }
