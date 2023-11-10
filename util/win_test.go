@@ -14,6 +14,21 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
+func TestQueryProcess(t *testing.T) {
+	err := util.SetupPowerShellVersion()
+	if err != nil {
+		t.Error(err)
+	}
+
+	pid := "5260"
+	pi, err := util.QueryProcess(pid)
+	if err != nil {
+		t.Error(err)
+	}
+	bs, _ := json.Marshal(pi)
+	t.Log(string(bs))
+}
+
 func TestPSVersionTable(t *testing.T) {
 	v, err := util.PSVersionTable()
 	if err != nil {

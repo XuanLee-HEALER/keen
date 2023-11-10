@@ -316,9 +316,30 @@ func ServiceByFilter(filterStr string) ([]ServiceInfo, error) {
 	}
 }
 
+// QueryProcess 根据pid查询进程信息
+func QueryProcess(pid string) (ProcessInfo, error) {
+	var res ProcessInfo
+	procs, err := ProcessInfoByFilter("ProcessId=" + pid)
+	if err != nil {
+		return res, err
+	}
+
+	if len(procs) <= 0 {
+		return res, fmt.Errorf("failed to find the process which process id is %s", pid)
+	}
+
+	return procs[0], nil
+}
+
 type ProcessInfo struct {
-	ProcessId       int `json:"ProcessId"`
-	ParentProcessId int `json:"ParentProcessId"`
+	ProcessId       int    `json:"ProcessId"`
+	ParentProcessId int    `json:"ParentProcessId"`
+	PID             string `json:"pid"`
+	Command         string `json:"ExecutablePath"`
+	State           string `json:"Status"`
+	StateDesc       string `json:"state_desc"`
+	PPID            string `json:"ppid"`
+	PGrpID          string `json:"process_group_id"`
 }
 
 // ProcessInfoByFilter 根据过滤信息获取进程信息
@@ -326,7 +347,7 @@ func ProcessInfoByFilter(filterStr string) ([]ProcessInfo, error) {
 	var script string
 	switch currentPSVer {
 	case PSv2:
-		script = `& {chcp 437 > $null; Get-WmiObject -Class Win32_Process -Filter "%s" | Select-Object ProcessId,ParentProcessId | Format-List}`
+		script = `& {chcp 437 > $null; Get-WmiObject -Class Win32_Process -Filter "%s" | Select-Object ProcessId,ParentProcessId,ExecutablePath | Format-List}`
 		script = fmt.Sprintf(script, filterStr)
 		bs, err := PSExec(script)
 		if err != nil {
@@ -343,11 +364,15 @@ func ProcessInfoByFilter(filterStr string) ([]ProcessInfo, error) {
 				for k, v := range info {
 					switch k {
 					case "ProcessId":
-						v, _ := strconv.Atoi(v)
-						processInfo.ProcessId = v
+						xv, _ := strconv.Atoi(v)
+						processInfo.PID = v
+						processInfo.ProcessId = xv
 					case "ParentProcessId":
-						v, _ := strconv.Atoi(v)
-						processInfo.ParentProcessId = v
+						xv, _ := strconv.Atoi(v)
+						processInfo.PPID = v
+						processInfo.ParentProcessId = xv
+					case "ExecutablePath":
+						processInfo.Command = v
 					}
 				}
 				processInfos = append(processInfos, processInfo)
@@ -356,7 +381,7 @@ func ProcessInfoByFilter(filterStr string) ([]ProcessInfo, error) {
 
 		return processInfos, nil
 	case PSv4, PSv5:
-		script = `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Process -Filter "%s" | Select-Object ProcessId,ParentProcessId | ConvertTo-Json}`
+		script = `& {chcp 437 > $null; Get-CimInstance -ClassName Win32_Process -Filter "%s" | Select-Object ProcessId,ParentProcessId,ExecutablePath | ConvertTo-Json}`
 		script = fmt.Sprintf(script, filterStr)
 		var procInfo ProcessInfo
 		err := PSRetrieve(script, &procInfo)
