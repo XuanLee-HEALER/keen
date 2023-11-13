@@ -20,7 +20,7 @@ func TestQueryProcess(t *testing.T) {
 		t.Error(err)
 	}
 
-	pid := "5260"
+	pid := "1020"
 	pi, err := util.QueryProcess(pid)
 	if err != nil {
 		t.Error(err)

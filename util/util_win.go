@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"log"
 	"os/exec"
 	"sort"
 	"strconv"
@@ -110,7 +109,7 @@ func PSVersionTable() (PSVersion, error) {
 
 // PSRetrieve 使用powershell内置的cmdlet，结果为json字符串，直接unmarshal到传入的对象指针中
 func PSRetrieve(xcmd string, obj any) error {
-	log.Println(ylog.TRACE, fmt.Sprintf("powershell retrieve object: \n%s", xcmd))
+	keen.Logger.Println(ylog.TRACE, fmt.Sprintf("powershell retrieve object: \n%s", xcmd))
 	pshell, err := exec.LookPath(POWERSHELL)
 	if err != nil {
 		return err
@@ -121,7 +120,7 @@ func PSRetrieve(xcmd string, obj any) error {
 	if err != nil {
 		return err
 	}
-	log.Println(ylog.TRACE, fmt.Sprintf("powershell retrieve object output: \n%s", string(bs)))
+	keen.Logger.Println(ylog.TRACE, fmt.Sprintf("powershell retrieve object output: \n%s", string(bs)))
 
 	err = json.Unmarshal(bs, obj)
 	if err != nil {
@@ -133,7 +132,7 @@ func PSRetrieve(xcmd string, obj any) error {
 
 // PSExec 使用powershell运行命令，返回输出内容
 func PSExec(xcmd string) ([]byte, error) {
-	log.Println(ylog.TRACE, fmt.Sprintf("powershell execute command: \n%s", xcmd))
+	keen.Logger.Println(ylog.TRACE, fmt.Sprintf("powershell execute command: \n%s", xcmd))
 	pshell, err := exec.LookPath(POWERSHELL)
 	if err != nil {
 		return nil, err
@@ -144,7 +143,7 @@ func PSExec(xcmd string) ([]byte, error) {
 	if err != nil {
 		return bs, err
 	}
-	log.Println(ylog.TRACE, fmt.Sprintf("powershell execute command output: \n%s", string(bs)))
+	keen.Logger.Println(ylog.TRACE, fmt.Sprintf("powershell execute command output: \n%s", string(bs)))
 
 	return bs, nil
 }
