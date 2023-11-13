@@ -131,7 +131,7 @@ func PSRetrieve(xcmd string, obj any) error {
 	return nil
 }
 
-// Exec 使用powershell运行命令，返回输出内容
+// PSExec 使用powershell运行命令，返回输出内容
 func PSExec(xcmd string) ([]byte, error) {
 	log.Println(ylog.TRACE, fmt.Sprintf("powershell execute command: \n%s", xcmd))
 	pshell, err := exec.LookPath(POWERSHELL)
@@ -340,6 +340,19 @@ type ProcessInfo struct {
 	StateDesc       string `json:"state_desc"`
 	PPID            string `json:"ppid"`
 	PGrpID          string `json:"process_group_id"`
+}
+
+func (pi ProcessInfo) String() string {
+	return fmt.Sprintf(`Process Information
+process_id: %d
+parent_process_id: %d
+pid: %s
+command: %s
+state: %s
+state_description: %s
+ppid: %s
+pgroup_id: %s
+`, pi.ProcessId, pi.ParentProcessId, pi.PID, pi.Command, pi.State, pi.StateDesc, pi.PPID, pi.PGrpID)
 }
 
 // ProcessInfoByFilter 根据过滤信息获取进程信息
