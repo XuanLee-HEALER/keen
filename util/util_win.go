@@ -185,7 +185,7 @@ type ComputerInfo struct {
 	NetworkAdapters           []NetworkAdapterInfo `json:"CsNetworkAdapters"`
 	NumberOfLogicalProcessors int                  `json:"CsNumberOfLogicalProcessors"`
 	NumberOfProcessors        int                  `json:"CsNumberOfProcessors"`
-	TotalPhysicalMemory       int64                `json:"CsTotalPhysicalMemory"`
+	TotalPhysicalMemory       uint64               `json:"CsTotalPhysicalMemory"`
 	TotalPhysicalMemoryStr    string               `json:"CsTotalPhysicalMemoryStr"`
 	Workgroup                 string               `json:"CsWorkgroup"`
 	MultiLanguage             []string             `json:"OsMuiLanguages"`
@@ -231,6 +231,13 @@ func HostComputerInfo() (ComputerInfo, error) {
 				case "Domain":
 					comp.Domain = v
 				case "Total Physical Memory":
+					pn := v[:len(v)-3]
+					pn = strings.ReplaceAll(pn, ",", "")
+					pnn, err := strconv.ParseUint(pn, 10, 64)
+					if err != nil {
+						return comp, err
+					}
+					comp.TotalPhysicalMemory = pnn
 					comp.TotalPhysicalMemoryStr = v
 				case "Time Zone":
 					comp.TimeZone = v
