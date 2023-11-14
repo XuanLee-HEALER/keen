@@ -148,6 +148,79 @@ func PSExec(xcmd string) ([]byte, error) {
 	return bs, nil
 }
 
+// ExecCmd 执行命令，返回顺序为标准输出、标准错误和执行错误对象
+func ExecCmd(path string,
+	args []string,
+	envs map[string]string,
+	stats []string) ([]byte, []byte, error) {
+	envstrs := make([]string, 0)
+	for k, v := range envs {
+		envstrs = append(envstrs, k+"="+v)
+	}
+
+	cmd := exec.Cmd{
+		Path: path,
+		Args: args,
+		Env:  envstrs,
+	}
+
+	keen.Logger.Println(ylog.DEBUG, fmt.Sprintf("exec command: %s", cmd.String()))
+
+	outp, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, nil, err
+	}
+	oute, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, nil, err
+	}
+	buf1, buf2 := make([]byte, 64*1024), make([]byte, 64*1024)
+	outbs, errbs := make([]byte, 0), make([]byte, 0)
+	go func() {
+		for {
+			n, err := outp.Read(buf1)
+			if err != nil {
+				return
+			}
+			outbs = append(outbs, buf1[:n]...)
+		}
+	}()
+	go func() {
+		for {
+			n, err := oute.Read(buf2)
+			if err != nil {
+				return
+			}
+			outbs = append(outbs, buf2[:n]...)
+		}
+	}()
+	in, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for _, stat := range stats {
+		_, err := in.Write([]byte(stat + "\n"))
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	err = in.Close()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, nil, err
+	}
+
+	if err := cmd.Wait(); err != nil {
+		return outbs, errbs, err
+	} else {
+		return outbs, errbs, nil
+	}
+}
+
 // PSEscape 转移PowerShell中的特殊字符
 func PSEscape(s string) string {
 	s = strings.ReplaceAll(s, "$", "`$")

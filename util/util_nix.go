@@ -13,7 +13,9 @@ import (
 	"strings"
 	"syscall"
 
+	"gitea.fcdm.top/lixuan/keen"
 	"gitea.fcdm.top/lixuan/keen/datastructure"
+	"gitea.fcdm.top/lixuan/keen/ylog"
 )
 
 func Sync(_ string) {
@@ -214,6 +216,8 @@ func ExecCmd(path string,
 			Setpgid: true,
 		},
 	}
+
+	keen.Logger.Println(ylog.Debug, fmt.Sprintf("exec command: %s", cmd.String()))
 
 	outp, err := cmd.StdoutPipe()
 	if err != nil {
