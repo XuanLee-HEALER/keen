@@ -211,3 +211,7 @@ func TestStringRegVal(t *testing.T) {
 	}
 	t.Log(string(bs))
 }
+
+func TestSync(t *testing.T) {
+	util.Sync(`C:\fcdmvolumes\09d469b1-42a3-4b25-4a6a-db58a8992e94`)
+}

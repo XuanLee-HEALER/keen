@@ -44,8 +44,11 @@ var ErrUnsupportedPSVersion error = errors.New("unsupported powershell version")
 
 func Sync(dir string) {
 	err := IterDir(dir, func(s string, de fs.DirEntry) bool { return false }, func(s string, de fs.DirEntry) error {
+		if s == dir || de.IsDir() {
+			return nil
+		}
 		p := s
-		wm := syscall.O_RDWR
+		wm := syscall.O_RDONLY
 		perm := de.Type().Perm()
 		f, err := syscall.Open(p, wm, uint32(perm))
 		if err != nil {
