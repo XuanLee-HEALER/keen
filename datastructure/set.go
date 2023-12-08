@@ -1,9 +1,27 @@
 package datastructure
 
+import (
+	"fmt"
+	"strings"
+)
+
 type Set[T comparable] map[T]struct{}
 
 func NewSet[T comparable]() Set[T] {
 	return make(Set[T])
+}
+
+func (set Set[T]) String() string {
+	strbuf := new(strings.Builder)
+	strbuf.WriteString("(")
+	for k := range set {
+		strbuf.WriteString(fmt.Sprintf("%v, ", k))
+	}
+	if strbuf.Len() != 1 {
+		strbuf.WriteString("\b\b")
+	}
+	strbuf.WriteString(")")
+	return strbuf.String()
 }
 
 func (set Set[T]) Contains(t T) bool {
