@@ -1,6 +1,7 @@
 package fsop
 
 import (
+	"errors"
 	"io"
 	"math/rand"
 	"os"
@@ -94,6 +95,9 @@ func copyFileN(dst string, src string, block FileSize, errflag *atomic.Int32) er
 // CopyFiles 拷贝文件列表，目标文件列表dsts和源文件列表srcs长度需要相等，否则会panic，
 // 通过block指定拷贝单位
 func CopyFiles(dsts []string, srcs []string, block FileSize) error {
+	if len(srcs) == 0 || len(dsts) == 0 {
+		return errors.New("there is not files will be copied")
+	}
 	errflag := new(atomic.Int32)
 	counter := int32(len(srcs))
 	errCh := make(chan error)
