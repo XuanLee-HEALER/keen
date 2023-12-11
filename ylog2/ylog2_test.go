@@ -1,9 +1,6 @@
 package ylog2_test
 
 import (
-	"os"
-	"path"
-	"strings"
 	"testing"
 
 	"gitea.fcdm.top/lixuan/keen/ylog2"
@@ -19,8 +16,8 @@ func TestYLog2Level(t *testing.T) {
 }
 
 func TestYLog2ConsoleLogger(t *testing.T) {
-	console := ylog2.NewConsoleWriter(func(i int) bool { return i >= ylog2.TRACE })
-	logger := ylog2.NewLogger(console)
+	console := ylog2.NewConsoleWriter(func(i int8) bool { return i >= ylog2.TRACE })
+	logger := ylog2.NewLogger(true, console)
 	logger.Trace("test trace log message")
 }
 
@@ -34,29 +31,52 @@ func TestSubPath(t *testing.T) {
 	p7 := "c:\\p2\\p1"
 	samples := []string{p1, p2, p3, p4, p5, p6, p7}
 
-	f := func(str string, lyr int) string {
-		pstck := make([]string, 0)
-
-		count := lyr
-		for count > 0 {
-			d, f := path.Split(str)
-			pstck = append(pstck, f)
-			if d == "" {
-				break
-			}
-
-			count--
-			str = d
-		}
-
-		for i, j := 0, len(pstck)-1; i < j; i, j = i+1, j-1 {
-			pstck[i], pstck[j] = pstck[j], pstck[i]
-		}
-
-		return strings.Join(pstck, string(os.PathSeparator))
-	}
-
 	for _, p := range samples {
-		t.Log(f(p, 1))
+		t.Log(ylog2.SubPath(p, 1))
+	}
+}
+
+func TestConsoleLogger(t *testing.T) {
+	console := ylog2.NewConsoleWriter(func(i int8) bool { return i >= ylog2.TRACE })
+	logger := ylog2.NewLogger(true, console)
+
+	logger.Trace("test trace log message")
+	logger.Debug("test debug log message")
+	logger.Info("test info log message")
+	logger.Warn("test warn log message")
+	logger.Error("test error log message")
+	// logger.Fatal("test fatal log message")
+}
+
+func TestFileLogger(t *testing.T) {
+	file, err := ylog2.NewFileWriter(".", "test.log", func(i int8) bool { return i >= ylog2.TRACE }, 0, func(pattern, des string) bool { return false })
+	if err != nil {
+		t.Error(err)
+	}
+	logger := ylog2.NewLogger(true, file)
+
+	logger.Trace("test trace log message")
+	logger.Debug("test debug log message")
+	logger.Info("test info log message")
+	logger.Warn("test warn log message")
+	logger.Error("test error log message")
+	// logger.Fatal("test fatal log message")
+}
+
+func TestMultiLogger(t *testing.T) {
+	console := ylog2.NewConsoleWriter(func(i int8) bool { return i >= ylog2.TRACE })
+	file, err := ylog2.NewFileWriter(".", "test.log", func(i int8) bool { return i >= ylog2.TRACE }, 0, func(pattern, des string) bool { return false })
+	if err != nil {
+		t.Error(err)
+	}
+	logger := ylog2.NewLogger(true, console, file)
+
+	for i := 0; i < 10; i++ {
+		logger.Trace("test trace log message")
+		logger.Debug("test debug log message")
+		logger.Info("test info log message")
+		logger.Warn("test warn log message")
+		logger.Error("test error log message")
+		// logger.Fatal("test fatal log message")
 	}
 }
