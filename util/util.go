@@ -19,6 +19,11 @@ import (
 
 var TrimSpace = func(r rune) bool { return r == ' ' || r == '\t' }
 
+func ExitWith(code int, clean func()) {
+	defer clean()
+	os.Exit(code)
+}
+
 // ReadListOutput 读取Format-list输出内容，返回数组的第一个元素为header
 func ReadListOutput(bs []byte) []map[string]string {
 	res := make([]map[string]string, 0)
