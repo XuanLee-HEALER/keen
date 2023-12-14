@@ -29,3 +29,19 @@ func TestDirSize(t *testing.T) {
 	}
 	t.Log("size: ", r)
 }
+
+func TestConvertGBKToUtf8(t *testing.T) {
+	oc := "这是UTF8编码的字符串"
+	ec, err := util.ConvertUtf8ToGBK(oc)
+	if err != nil {
+		t.Errorf("failed to encode: %v", err)
+	}
+	t.Log("gbk: ", ec)
+
+	dc, err := util.ConvertGBKToUtf8(ec)
+	if err != nil {
+		t.Errorf("failed to decode: %v", err)
+	}
+
+	t.Log("utf-8:", dc)
+}

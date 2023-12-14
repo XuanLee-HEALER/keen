@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"math"
 	"os"
@@ -15,6 +16,8 @@ import (
 	"strings"
 
 	"gitea.fcdm.top/lixuan/keen/fp"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 )
 
 var TrimSpace = func(r rune) bool { return r == ' ' || r == '\t' }
@@ -312,4 +315,22 @@ func IterDirWithVal[T any](path string, filter func(string, fs.DirEntry) bool, f
 	})
 
 	return res, err
+}
+
+func ConvertGBKToUtf8(str string) (string, error) {
+	rd := transform.NewReader(bytes.NewReader([]byte(str)), simplifiedchinese.GBK.NewDecoder())
+	d, err := io.ReadAll(rd)
+	if err != nil {
+		return "", err
+	}
+	return string(d), nil
+}
+
+func ConvertUtf8ToGBK(str string) (string, error) {
+	rd := transform.NewReader(bytes.NewReader([]byte(str)), simplifiedchinese.GBK.NewEncoder())
+	d, err := io.ReadAll(rd)
+	if err != nil {
+		return "", err
+	}
+	return string(d), nil
 }

@@ -6,6 +6,7 @@ require (
 	github.com/cnyjp/fcdmpublic v0.0.7
 	github.com/fatih/color v1.15.0
 	golang.org/x/sys v0.12.0
+	golang.org/x/text v0.14.0
 )
 
 require (
