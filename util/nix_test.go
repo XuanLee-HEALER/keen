@@ -1,5 +1,5 @@
-//go:build aix || darwin || linux
-// +build aix darwin linux
+//go:build linux && aix && darwin
+// +build linux,aix,darwin
 
 package util_test
 

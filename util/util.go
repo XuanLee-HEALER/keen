@@ -20,10 +20,13 @@ import (
 	"golang.org/x/text/transform"
 )
 
+type CleanFunc func()
+
 var TrimSpace = func(r rune) bool { return r == ' ' || r == '\t' }
 
-func ExitWith(code int, clean func()) {
-	defer clean()
+// ExitWith 以状态码{code}退出程序，执行{clean}函数
+func ExitWith(code int, clean CleanFunc) {
+	clean()
 	os.Exit(code)
 }
 

@@ -9,15 +9,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"gitea.fcdm.top/lixuan/keen"
 	"gitea.fcdm.top/lixuan/keen/datastructure"
 	"gitea.fcdm.top/lixuan/keen/util"
 	"golang.org/x/sys/windows/registry"
 )
-
-func init() {
-	keen.SetLogger(nil)
-}
 
 func TestQueryProcess(t *testing.T) {
 	err := util.SetupPowerShellVersion()
@@ -214,4 +209,8 @@ func TestStringRegVal(t *testing.T) {
 
 func TestSync(t *testing.T) {
 	util.Sync(`C:\fcdmvolumes\09d469b1-42a3-4b25-4a6a-db58a8992e94`)
+}
+
+func TestXt(t *testing.T) {
+	util.Xt()
 }

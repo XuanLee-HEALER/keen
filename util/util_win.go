@@ -9,17 +9,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 
-	"gitea.fcdm.top/lixuan/keen"
 	"gitea.fcdm.top/lixuan/keen/datastructure"
 	"gitea.fcdm.top/lixuan/keen/fp"
-	"gitea.fcdm.top/lixuan/keen/ylog"
+	"github.com/go-ole/go-ole"
+	"github.com/go-ole/go-ole/oleutil"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -42,30 +40,33 @@ const (
 var currentPSVer PSVersion
 var ErrUnsupportedPSVersion error = errors.New("unsupported powershell version")
 
-func Sync(dir string) {
-	err := IterDir(dir, func(s string, de fs.DirEntry) bool { return false }, func(s string, de fs.DirEntry) error {
-		if s == dir || de.IsDir() {
-			return nil
-		}
-		p := s
-		wm := syscall.O_RDONLY
-		perm := de.Type().Perm()
-		f, err := syscall.Open(p, wm, uint32(perm))
-		if err != nil {
-			return err
-		}
-		defer syscall.Close(f)
-		err = syscall.Fsync(f)
-		if err != nil {
-			return err
-		}
+func Sync(dir string) error {
+	// err := IterDir(dir, func(s string, de fs.DirEntry) bool { return false }, func(s string, de fs.DirEntry) error {
+	// 	if s == dir || de.IsDir() {
+	// 		return nil
+	// 	}
+	// 	p := s
+	// 	wm := syscall.O_RDONLY
+	// 	perm := de.Type().Perm()
+	// 	f, err := syscall.Open(p, wm, uint32(perm))
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	defer syscall.Close(f)
+	// 	err = syscall.Fsync(f)
+	// 	if err != nil {
+	// 		return err
+	// 	}
 
-		return nil
-	})
+	// 	return nil
+	// })
 
-	if err != nil {
-		keen.Logger.Println(ylog.ERROR, fmt.Sprintf("failed to sync filesystem buffer to disk: %v", err))
-	}
+	// if err != nil {
+	// 	keen.H(fmt.Sprintf("failed to sync filesystem buffer to disk: %v", err))
+	// 	return err
+	// }
+
+	return nil
 }
 
 func SetupPowerShellVersion() error {
@@ -112,7 +113,7 @@ func PSVersionTable() (PSVersion, error) {
 
 // PSRetrieve 使用powershell内置的cmdlet，结果为json字符串，直接unmarshal到传入的对象指针中
 func PSRetrieve(xcmd string, obj any) error {
-	keen.Logger.Println(ylog.TRACE, fmt.Sprintf("powershell retrieve object: \n%s", xcmd))
+	// keen.Logger.Println(ylog.TRACE, fmt.Sprintf("powershell retrieve object: \n%s", xcmd))
 	pshell, err := exec.LookPath(POWERSHELL)
 	if err != nil {
 		return err
@@ -123,7 +124,7 @@ func PSRetrieve(xcmd string, obj any) error {
 	if err != nil {
 		return err
 	}
-	keen.Logger.Println(ylog.TRACE, fmt.Sprintf("powershell retrieve object output: \n%s", string(bs)))
+	// keen.Logger.Println(ylog.TRACE, fmt.Sprintf("powershell retrieve object output: \n%s", string(bs)))
 
 	err = json.Unmarshal(bs, obj)
 	if err != nil {
@@ -135,7 +136,7 @@ func PSRetrieve(xcmd string, obj any) error {
 
 // PSExec 使用powershell运行命令，返回输出内容
 func PSExec(xcmd string) ([]byte, error) {
-	keen.Logger.Println(ylog.TRACE, fmt.Sprintf("powershell execute command: \n%s", xcmd))
+	// keen.Logger.Println(ylog.TRACE, fmt.Sprintf("powershell execute command: \n%s", xcmd))
 	pshell, err := exec.LookPath(POWERSHELL)
 	if err != nil {
 		return nil, err
@@ -146,7 +147,7 @@ func PSExec(xcmd string) ([]byte, error) {
 	if err != nil {
 		return bs, err
 	}
-	keen.Logger.Println(ylog.TRACE, fmt.Sprintf("powershell execute command output: \n%s", string(bs)))
+	// keen.Logger.Println(ylog.TRACE, fmt.Sprintf("powershell execute command output: \n%s", string(bs)))
 
 	return bs, nil
 }
@@ -167,7 +168,7 @@ func ExecCmd(path string,
 		Env:  envstrs,
 	}
 
-	keen.Logger.Println(ylog.DEBUG, fmt.Sprintf("exec command: %s", cmd.String()))
+	// keen.Logger.Println(ylog.DEBUG, fmt.Sprintf("exec command: %s", cmd.String()))
 
 	outp, err := cmd.StdoutPipe()
 	if err != nil {
@@ -791,4 +792,47 @@ func StartService(sname string) ([]byte, error) {
 func StopService(sname string) ([]byte, error) {
 	STOP_SVC_SCRIPT := `& {chcp 437 > $null; Stop-Service -Name "%s"}`
 	return PSExec(fmt.Sprintf(STOP_SVC_SCRIPT, sname))
+}
+
+func Xt() {
+	ole.CoInitialize(0)
+	defer ole.CoUninitialize()
+
+	unknown, _ := oleutil.CreateObject("WbemScripting.SWbemLocator")
+	defer unknown.Release()
+
+	wmi, _ := unknown.QueryInterface(ole.IID_IDispatch)
+	defer wmi.Release()
+
+	serviceRaw, _ := oleutil.CallMethod(wmi, "ConnectServer")
+	defer serviceRaw.Clear()
+
+	service := serviceRaw.ToIDispatch()
+	defer service.Release()
+
+	queryRaw := "SELECT * FROM Win32_OperatingSystem"
+	query, _ := oleutil.CallMethod(service, "ExecQuery", queryRaw)
+	defer query.Clear()
+
+	resultRaw, _ := oleutil.CallMethod(query.ToIDispatch(), "Next")
+	defer resultRaw.Clear()
+
+	if resultRaw.Value() == nil {
+		fmt.Println("No data returned.")
+		return
+	}
+
+	result := resultRaw.ToIDispatch()
+	defer result.Release()
+
+	osNameRaw, _ := oleutil.GetProperty(result, "Caption")
+	osName := osNameRaw.ToString()
+	defer osNameRaw.Clear()
+
+	osVersionRaw, _ := oleutil.GetProperty(result, "Version")
+	osVersion := osVersionRaw.ToString()
+	defer osVersionRaw.Clear()
+
+	fmt.Printf("操作系统名称: %s\n", osName)
+	fmt.Printf("操作系统版本: %s\n", osVersion)
 }

@@ -1,22 +1,15 @@
 package keen
 
-import (
-	"log"
+type UtilRecord func(string)
 
-	"gitea.fcdm.top/lixuan/keen/ylog"
-)
+var H UtilRecord = func(s string) {
+	println(s)
+}
 
-var Logger *log.Logger
+func Mute() {
+	H = nil
+}
 
-// SetLogger 设置keen使用的logger，如果不设置则使用默认logger
-func SetLogger(l *log.Logger) {
-	if l != nil {
-		Logger = l
-	} else {
-		logConfig := ylog.YLogger{
-			ConsoleLevel:    ylog.Debug,
-			ConsoleColorful: true,
-		}
-		Logger = logConfig.InitLogger()
-	}
+func Custom(rcd UtilRecord) {
+	H = rcd
 }

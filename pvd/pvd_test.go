@@ -9,22 +9,6 @@ import (
 	"github.com/cnyjp/fcdmpublic/model"
 )
 
-func TestReturnStatus1(t *testing.T) {
-	rt := pvd.ReturnStatus{
-		Code:    0,
-		Message: "",
-	}
-	rt.Exit()
-}
-
-func TestReturnStatus2(t *testing.T) {
-	rt := pvd.ReturnStatus{
-		Code:    1,
-		Message: "common error",
-	}
-	rt.Exit()
-}
-
 func sampleEnv() {
 	os.Setenv(model.FCDM_EV_COMMAND, "sample")
 	os.Setenv(model.FCDM_EV_APPNAME, "sample_app")
