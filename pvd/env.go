@@ -19,6 +19,7 @@ type FCDMArgument struct {
 	BackupClusterMessage    string            `json:"backup_cluster_message"`
 	JobStep                 string            `json:"job_step"`
 	JobType                 string            `json:"job_type"`
+	JobID                   string            `json:"job_id"` // task id
 }
 
 func NewFCDMArgument() FCDMArgument {
@@ -33,6 +34,7 @@ func NewFCDMArgument() FCDMArgument {
 	appExt := env[model.FCDM_EV_APP_EXTENSION]
 	jobStep := env[model.FCDM_EV_JOBSTEP]
 	jobType := env[model.FCDM_EV_JOB_TYPE]
+	jobID := env[model.FCDM_EV_MAINJOB_ID]
 
 	cfg := make(map[string]string)
 	icfg := make(map[string]string)
@@ -56,7 +58,7 @@ func NewFCDMArgument() FCDMArgument {
 	bkc := env[model.FCDM_EV_JOB_INIT_MESSAGE]
 
 	return FCDMArgument{
-		cmd, appName, appExt, cfg, icfg, vi, vii, bkt, bkc, jobStep, jobType,
+		cmd, appName, appExt, cfg, icfg, vi, vii, bkt, bkc, jobStep, jobType, jobID,
 	}
 }
 

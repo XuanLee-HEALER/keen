@@ -24,7 +24,7 @@ type Holder interface {
 }
 
 // Provider
-type Provider interface {
+type VProvider interface {
 	// Run 返回状态码，无错误为0，有错误为非0值
 	Run() int
 	// Discover 发现过程，返回主机上所有的应用
