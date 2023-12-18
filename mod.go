@@ -7,7 +7,7 @@ var H UtilRecord = func(s string) {
 }
 
 func Mute() {
-	H = nil
+	H = func(s string) {}
 }
 
 func Custom(rcd UtilRecord) {
