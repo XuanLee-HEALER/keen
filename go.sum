@@ -1,5 +1,7 @@
 github.com/cnyjp/fcdmpublic v0.0.7 h1:2ffoOuXrxaAvFYKXGYkBgK6/m/VTNmwnIavi5G16FTM=
 github.com/cnyjp/fcdmpublic v0.0.7/go.mod h1:+94+pyrti+HFtfhlpWW/imJ3T2/UlPYHz45Lw2yrk8Q=
+github.com/emirpasic/gods v1.18.1 h1:FXtiHYKDGKCW2KzwZKx0iC0PQmdlorYgdFG9jPXJ1Bc=
+github.com/emirpasic/gods v1.18.1/go.mod h1:8tpGGwCnJ5H4r6BWwaV6OrWmMoPhUl5jm/FMNAnJvWQ=
 github.com/fatih/color v1.15.0 h1:kOqh6YHBtK8aywxGerMG2Eq3H6Qgoqeo13Bk2Mv/nBs=
 github.com/fatih/color v1.15.0/go.mod h1:0h5ZqXfHYED7Bhv2ZJamyIOUej9KtShiJESRwBDUSsw=
 github.com/go-ole/go-ole v1.3.0 h1:Dt6ye7+vXGIKZ7Xtk4s6/xVdGDQynvom7xCFEdWr6uE=
