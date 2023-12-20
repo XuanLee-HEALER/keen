@@ -17,3 +17,24 @@ func TestCreateFixSizeFile(t *testing.T) {
 	}
 	defer f.Close()
 }
+
+func TestCopy(t *testing.T) {
+	// size := 650 * util.MB
+	// f, err := util.CreateFixSizeFile("src", 650*util.MB)
+	// if err != nil {
+	// 	t.Error(err)
+	// }
+	// defer f.Close()
+
+	// err = util.FillFile(f, size)
+	// if err != nil {
+	// 	t.Error(err)
+	// }
+	// 8C96E6C189F9202AD127052429A90201
+	// 82B0186178EF3B1C1F12A6AD29FCFB16
+	task := util.NewCopyTask("src", "dst")
+	err := util.Copy(task, 3)
+	if err != nil {
+		t.Error(err)
+	}
+}

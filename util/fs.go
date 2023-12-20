@@ -1,8 +1,8 @@
 package util
 
 import (
-	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"sync"
 	"syscall"
@@ -24,6 +24,33 @@ type SpaceNotEnoughErr struct {
 
 func (e *SpaceNotEnoughErr) Error() string {
 	return "There is not enough space on the disk."
+}
+
+func FillFile(f *os.File, size FileSize) error {
+	const blockSize = 4096
+
+	randArr := func(arr *[blockSize]byte) {
+		for i := 0; i < blockSize; i++ {
+			arr[i] = byte(rand.Intn(256))
+		}
+	}
+
+	block := [blockSize]byte{}
+	x, r := size/blockSize, size%blockSize
+	if r > 0 {
+		x++
+	}
+
+	for i := 0; i < int(x); i++ {
+		randArr(&block)
+		f.Seek(int64(blockSize*i), 0)
+		_, err := f.Write(block[:])
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // CreateFixSizeFile 创建一个固定大小的文件，如果创建失败返回error
@@ -63,84 +90,80 @@ func CopyFileList(tasks ...CopyTask) {
 
 }
 
-func Copy(task CopyTask, conc int) error {
+func Copy(task CopyTask, conc int64, buffer int64) error {
 	// 打开源文件
-	srcFile, err := os.Open(task.src)
+	sourceFile, err := os.Open(task.src)
 	if err != nil {
 		return err
 	}
-	defer srcFile.Close()
 
-	// 获取源文件信息
-	srcFileInfo, err := srcFile.Stat()
+	// 打开目标文件
+	destinationFile, err := os.Create(task.dst)
 	if err != nil {
+		sourceFile.Close()
 		return err
 	}
-	// 获取源文件大小
-	fileSize := srcFileInfo.Size()
 
-	// 创建目标文件
-	dstFile, err := CreateFixSizeFile(task.dst, FileSize(fileSize))
+	// 创建一个同步器来同步对两个文件的访问
+	mutex := sync.Mutex{}
+
+	// 创建一个缓冲区
+	buf := make([]byte, buffer)
+
+	// 计算文件的大小
+	fileSize, err := sourceFile.Seek(0, io.SeekEnd)
 	if err != nil {
+		sourceFile.Close()
+		destinationFile.Close()
 		return err
 	}
-	defer dstFile.Close()
 
-	// 计算每个goroutine需要复制的字节数
-	chunkSize := fileSize / int64(conc)
+	// 创建一个通道来传递拷贝任务
+	tasks := make(chan int, conc)
 
-	// 创建等待组
-	var wg sync.WaitGroup
-	wg.Add(conc)
-
-	// 创建一个channel，用于在任意goroutine失败时通知主goroutine
-	errChan := make(chan error, conc)
-
-	// 启动多个goroutine并发地复制文件
+	// 启动多个goroutine来拷贝文件
 	for i := 0; i < conc; i++ {
-		go func(i int) {
-			// 计算当前goroutine需要复制的起始位置和结束位置
-			offset := int64(i) * chunkSize
-			start := offset
-			end := offset + chunkSize
-			if i == concurrency-1 {
-				end = fileSize
-			}
+		go func() {
+			// 从通道中获取拷贝任务
+			start := <-tasks
+			end := start + 4096
 
-			// 复制文件
-			_, err := srcFile.Seek(start, io.SeekStart)
-			if err != nil {
-				errChan <- err
-				return
-			}
-			n, err := io.CopyN(dstFile, srcFile, end-start)
-			if err != nil {
-				errChan <- err
-				return
-			}
-			fmt.Printf("goroutine %d copied %d bytes\n", i, n)
+			// 从源文件读取数据
+			for n := start; n < end; n += 4096 {
+				// 从源文件读取数据
+				n, err := sourceFile.Read(buf[n-start:])
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					sourceFile.Close()
+					destinationFile.Close()
+					return
+				}
 
-			// 通知等待组
-			wg.Done()
-		}(i)
+				// 将数据写入目标文件
+				mutex.Lock()
+				destinationFile.Write(buf[n-start:])
+				mutex.Unlock()
+			}
+		}()
 	}
 
-	// 等待所有goroutine完成或出错
-	go func() {
-		wg.Wait()
-		close(errChan)
-	}()
-
-	// 等待任意goroutine失败或全部完成
-	for err := range errChan {
-		if err != nil {
-			fmt.Printf("error: %v\n", err)
-			for range errChan {
-				// drain the channel
-			}
-			break
-		}
+	// 将所有拷贝任务放入通道
+	for i := 0; i < int(fileSize)/4096; i++ {
+		tasks <- i * 4096
 	}
 
-	fmt.Println("copy completed")
+	// 关闭通道
+	close(tasks)
+
+	// 等待所有goroutine执行完毕
+	for range tasks {
+	}
+
+	// 关闭两个文件
+	sourceFile.Close()
+	destinationFile.Close()
+
+	return nil
 }
