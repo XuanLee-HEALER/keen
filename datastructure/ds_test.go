@@ -1,10 +1,6 @@
 package datastructure_test
 
 import (
-	"io/fs"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	"gitea.fcdm.top/lixuan/keen/datastructure"
@@ -76,37 +72,10 @@ func TestDirTree(t *testing.T) {
 
 func TestDirToTree(t *testing.T) {
 	p := `F:\yzy\keen`
-	tr := datastructure.NewDirTree()
-	tr.AddDir(datastructure.NewDir(p))
-
-	filepath.WalkDir(p, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if d.Name() == p {
-			return nil
-		}
-
-		relPath, _ := filepath.Rel(p, path)
-		xpath := strings.Split(relPath, string(os.PathSeparator))
-		pathes := make([]string, 0)
-		pathes = append(pathes, p)
-		pathes = append(pathes, xpath[:len(xpath)-1]...)
-		if d.IsDir() {
-			tr.AddDir(datastructure.NewDir(d.Name()), pathes...)
-		} else {
-			info, _ := d.Info()
-			tr.AddFile(datastructure.NewFile(&datastructure.SimpleFile{
-				FileName:   d.Name(),
-				Size:       uint64(info.Size()),
-				ModifyTime: info.ModTime().Format("2006-01-02"),
-				Access:     info.Mode().String(),
-			}), pathes...)
-		}
-
-		return nil
-	})
+	tr, err := datastructure.ReadDirTree(p)
+	if err != nil {
+		t.Error(err)
+	}
 
 	t.Logf("\n%s\n", tr)
 }

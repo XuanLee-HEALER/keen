@@ -1,7 +1,11 @@
 package datastructure
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/emirpasic/gods/maps/treemap"
@@ -34,8 +38,8 @@ type DirNode struct {
 	subs *treemap.Map
 }
 
-func NewDirTree() DirTree {
-	return DirTree(DirNode{nil, treemap.NewWithStringComparator()})
+func NewDirTree() *DirTree {
+	return (*DirTree)(&DirNode{nil, treemap.NewWithStringComparator()})
 }
 
 func NewDir(dirName string) *DirTree {
@@ -121,4 +125,65 @@ func (t DirTree) show(indent int) string {
 
 func (t DirTree) String() string {
 	return t.show(0)
+}
+
+// ReadDirTree
+func ReadDirTree(pt string) (*DirTree, error) {
+	p := filepath.Clean(pt)
+	fi, err := os.Stat(p)
+	if err != nil {
+		return nil, err
+	}
+
+	if !fi.IsDir() {
+		return nil, errors.New("given path is not a directory")
+	}
+
+	p, err = filepath.Abs(p)
+	if err != nil {
+		return nil, err
+	}
+
+	tr := NewDirTree()
+	xd := filepath.Dir(p)
+	tr.AddDir(NewDir(xd))
+
+	err = filepath.WalkDir(p, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if strings.HasPrefix(d.Name(), ".") {
+			if d.IsDir() {
+				return filepath.SkipDir
+			} else {
+				return nil
+			}
+		}
+
+		relPath, _ := filepath.Rel(xd, path)
+		xpath := strings.Split(relPath, string(os.PathSeparator))
+		pathes := make([]string, 0)
+		pathes = append(pathes, xd)
+		pathes = append(pathes, xpath[:len(xpath)-1]...)
+		if d.IsDir() {
+			tr.AddDir(NewDir(d.Name()), pathes...)
+		} else {
+			info, _ := d.Info()
+			tr.AddFile(NewFile(&SimpleFile{
+				FileName:   d.Name(),
+				Size:       uint64(info.Size()),
+				ModifyTime: info.ModTime().Format("2006-01-02"),
+				Access:     info.Mode().String(),
+			}), pathes...)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return tr, nil
 }
