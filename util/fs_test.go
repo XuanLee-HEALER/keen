@@ -1,6 +1,8 @@
 package util_test
 
 import (
+	"container/heap"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -19,6 +21,21 @@ func TestCreateFixSizeFile(t *testing.T) {
 		t.Errorf("failed to create file: %v", err)
 	}
 	defer clean()
+}
+
+func TestCopyTaskHeap(t *testing.T) {
+	gTasks := make(util.CopyTaskHeap, 0)
+
+	for i := 0; i < 50; i++ {
+		rs := rand.Intn(10)
+		gTasks = append(gTasks, util.GroupCopyTask{util.FileSize(rs), nil})
+	}
+
+	heap.Init(&gTasks)
+
+	for gTasks.Len() > 0 {
+		t.Log("current value", int64(heap.Pop(&gTasks).(util.GroupCopyTask).SizeSum))
+	}
 }
 
 func TestCopy(t *testing.T) {

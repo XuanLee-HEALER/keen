@@ -192,6 +192,9 @@ func (h *CopyTaskHeap) Pop() any {
 }
 
 func SplitTasksToNGroups(tasks []*CopyTask, minGroups int, maxGroups int) ([]GroupCopyTask, bool) {
+	// 如果tasks为0、1，那么直接返回GroupTask
+	// 如果tasks为2（min）~max中间的值，那么返回n个GroupTask
+	// 如果task大于max，那么开始尝试分组（贪心）
 	if minGroups < 1 || maxGroups > 8 {
 		return nil, false
 	}
@@ -202,6 +205,12 @@ func SplitTasksToNGroups(tasks []*CopyTask, minGroups int, maxGroups int) ([]Gro
 	}
 
 	heap.Init(&ini)
+	for _, t := range tasks {
+		gt := heap.Pop(&ini).(GroupCopyTask)
+		gt.SizeSum += t.Size
+		gt.Tasks = append(gt.Tasks, t)
+		heap.Push(&ini, gt)
+	}
 
 	return nil, true
 }
