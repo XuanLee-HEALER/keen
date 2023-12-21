@@ -1,11 +1,14 @@
 package util
 
 import (
+	"container/heap"
+	"fmt"
 	"io"
 	"math/rand"
 	"os"
-	"sync"
 	"syscall"
+
+	"gitea.fcdm.top/lixuan/keen"
 )
 
 type FileSize int64
@@ -53,11 +56,11 @@ func FillFile(f *os.File, size FileSize) error {
 	return nil
 }
 
-// CreateFixSizeFile 创建一个固定大小的文件，如果创建失败返回error
-func CreateFixSizeFile(fn string, size FileSize) (*os.File, error) {
+// CreateFixSizeFile 向硬盘申请固定大小的空间，如果申请失败返回error
+func CreateFixSizeFile(fn string, size FileSize) (*os.File, CleanFunc, error) {
 	f, err := os.Create(fn)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// 设置文件大小
@@ -67,10 +70,12 @@ func CreateFixSizeFile(fn string, size FileSize) (*os.File, error) {
 			os.Remove(fn)
 		}()
 
-		return nil, err
+		return nil, nil, err
 	}
 
-	return f, nil
+	return f, func() {
+		defer f.Close()
+	}, nil
 }
 
 func IsSpaceNotEnough(err error) bool {
@@ -78,92 +83,125 @@ func IsSpaceNotEnough(err error) bool {
 }
 
 type CopyTask struct {
-	src string
-	dst string
+	Src   string
+	Dst   string
+	sFile *os.File
+	dFile *os.File
+	Size  FileSize
 }
 
-func NewCopyTask(src, dst string) CopyTask {
-	return CopyTask{src, dst}
+func NewCopyTask(src, dst string) *CopyTask {
+	return &CopyTask{
+		Src: src,
+		Dst: dst,
+	}
 }
 
-func CopyFileList(tasks ...CopyTask) {
-
+func (t CopyTask) String() string {
+	return fmt.Sprintf("Copy Task: source(%s) -> destination(%s)", t.Src, t.Dst)
 }
 
-func Copy(task CopyTask, conc int64, buffer int64) error {
-	// 打开源文件
-	sourceFile, err := os.Open(task.src)
-	if err != nil {
-		return err
-	}
+func SetupCopyTasks(tasks ...*CopyTask) error {
+	errCh := make(chan error)
 
-	// 打开目标文件
-	destinationFile, err := os.Create(task.dst)
-	if err != nil {
-		sourceFile.Close()
-		return err
-	}
-
-	// 创建一个同步器来同步对两个文件的访问
-	mutex := sync.Mutex{}
-
-	// 创建一个缓冲区
-	buf := make([]byte, buffer)
-
-	// 计算文件的大小
-	fileSize, err := sourceFile.Seek(0, io.SeekEnd)
-	if err != nil {
-		sourceFile.Close()
-		destinationFile.Close()
-		return err
-	}
-
-	// 创建一个通道来传递拷贝任务
-	tasks := make(chan int, conc)
-
-	// 启动多个goroutine来拷贝文件
-	for i := 0; i < conc; i++ {
-		go func() {
-			// 从通道中获取拷贝任务
-			start := <-tasks
-			end := start + 4096
-
-			// 从源文件读取数据
-			for n := start; n < end; n += 4096 {
-				// 从源文件读取数据
-				n, err := sourceFile.Read(buf[n-start:])
-				if err != nil {
-					if err == io.EOF {
-						break
-					}
-					sourceFile.Close()
-					destinationFile.Close()
-					return
-				}
-
-				// 将数据写入目标文件
-				mutex.Lock()
-				destinationFile.Write(buf[n-start:])
-				mutex.Unlock()
+	for _, task := range tasks {
+		if task.Src == "" || task.Dst == "" {
+			errCh <- fmt.Errorf("source file (%s) or destination file (%s) is invalid", task.Src, task.Dst)
+		}
+		go func(t *CopyTask) {
+			rf, err := os.Open(t.Src)
+			if err != nil {
+				errCh <- err
+				return
 			}
-		}()
+
+			fs, err := rf.Seek(0, io.SeekEnd)
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			df, _, err := CreateFixSizeFile(t.Dst, FileSize(fs)*B)
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			t.sFile = rf
+			t.dFile = df
+			t.Size = FileSize(fs)
+			errCh <- nil
+		}(task)
 	}
 
-	// 将所有拷贝任务放入通道
-	for i := 0; i < int(fileSize)/4096; i++ {
-		tasks <- i * 4096
+	var err error
+	clean := false
+	for err = range errCh {
+		if err != nil {
+			clean = true
+			break
+		}
 	}
 
-	// 关闭通道
-	close(tasks)
-
-	// 等待所有goroutine执行完毕
-	for range tasks {
+	if clean {
+		for _, t := range tasks {
+			if t.sFile != nil {
+				t.sFile.Close()
+			}
+			if t.dFile != nil {
+				err := os.Remove(t.Dst)
+				if err != nil {
+					keen.H(fmt.Sprintf("failed to delete newly created file [%s]: %v", t.Dst, err))
+				}
+			}
+		}
 	}
 
-	// 关闭两个文件
-	sourceFile.Close()
-	destinationFile.Close()
+	return err
+}
 
-	return nil
+type GroupCopyTask struct {
+	SizeSum FileSize
+	Tasks   []*CopyTask
+}
+
+type CopyTaskHeap []GroupCopyTask
+
+func (h CopyTaskHeap) Len() int {
+	return len(h)
+}
+
+func (h CopyTaskHeap) Less(i, j int) bool {
+	return h[i].SizeSum < h[j].SizeSum
+}
+
+func (h CopyTaskHeap) Swap(i, j int) {
+	h[i], h[j] = h[j], h[i]
+}
+
+func (h *CopyTaskHeap) Push(x any) {
+	*h = append(*h, x.(GroupCopyTask))
+}
+
+func (h *CopyTaskHeap) Pop() any {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[:n-1]
+	return x
+}
+
+func SplitTasksToNGroups(tasks []*CopyTask, minGroups int, maxGroups int) ([]GroupCopyTask, bool) {
+	if minGroups < 1 || maxGroups > 8 {
+		return nil, false
+	}
+
+	var ini CopyTaskHeap = make([]GroupCopyTask, 0)
+	for i := 0; i < minGroups; i++ {
+		ini = append(ini, GroupCopyTask{0, make([]*CopyTask, 0)})
+	}
+
+	heap.Init(&ini)
+
+	return nil, true
 }
