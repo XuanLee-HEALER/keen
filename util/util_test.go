@@ -1,6 +1,7 @@
 package util_test
 
 import (
+	"errors"
 	"io/fs"
 	"testing"
 
@@ -44,4 +45,70 @@ func TestConvertGBKToUtf8(t *testing.T) {
 	}
 
 	t.Log("utf-8:", dc)
+}
+
+func TestMinInt(t *testing.T) {
+	arr := []int{2, 10, 1, 17, 17, 26, 22, 32, 1, 20, 30, 12, 28, 13, 4, 18, 31, 16, 11, 10}
+	min, ok := util.MinInt(arr)
+	t.Log("min", min)
+	if !ok {
+		t.Error(errors.New("valid input"))
+	}
+
+	if min != 1 {
+		t.FailNow()
+	}
+}
+
+func TestMinIntInvalidInput(t *testing.T) {
+	arr := []int{}
+	_, ok := util.MinInt(arr)
+	if ok {
+		t.Error(errors.New("invalid input"))
+	}
+}
+
+func TestMaxInt(t *testing.T) {
+	arr := []int{2, 10, 1, 17, 17, 26, 22, 32, 1, 20, 30, 12, 28, 13, 4, 18, 31, 16, 11, 10}
+	max, ok := util.MaxInt(arr)
+	t.Log("max", max)
+	if !ok {
+		t.Error(errors.New("valid input"))
+	}
+
+	if max != 32 {
+		t.FailNow()
+	}
+}
+
+func TestMaxIntInvalidInput(t *testing.T) {
+	arr := []int{}
+	_, ok := util.MaxInt(arr)
+	if ok {
+		t.Error(errors.New("invalid input"))
+	}
+}
+
+func TestMinMaxInt(t *testing.T) {
+	arr := []int{2, 10, 1, 17, 17, 26, 22, 32, 1, 20, 30, 12, 28, 13, 4, 18, 31, 16, 11, 10}
+	min, max, ok := util.MinMaxInt(arr)
+	t.Log("min", min, "max", max)
+	if !ok {
+		t.Error(errors.New("valid input"))
+	}
+
+	if min != 1 {
+		t.FailNow()
+	}
+	if max != 32 {
+		t.FailNow()
+	}
+}
+
+func TestMinMaxIntInvalidInput(t *testing.T) {
+	arr := []int{}
+	_, _, ok := util.MinMaxInt(arr)
+	if ok {
+		t.Error(errors.New("invalid input"))
+	}
 }

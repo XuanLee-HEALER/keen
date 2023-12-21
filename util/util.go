@@ -337,3 +337,82 @@ func ConvertUtf8ToGBK(str string) (string, error) {
 	}
 	return string(d), nil
 }
+
+type Less func(i, j any) bool
+
+func Min[T any](eles []T, cmp Less) (min T, find bool) {
+	if len(eles) == 0 {
+		find = false
+	} else if len(eles) == 1 {
+		min = eles[0]
+		find = true
+	} else {
+		b := eles[0]
+		for _, e := range eles[1:] {
+			if !cmp(b, e) {
+				b = e
+			}
+		}
+		min = b
+		find = true
+	}
+
+	return
+}
+
+func MinInt(arr []int) (min int, find bool) {
+	return Min[int](arr, func(i, j any) bool { return i.(int) < j.(int) })
+}
+
+func Max[T any](eles []T, cmp Less) (max T, find bool) {
+	if len(eles) == 0 {
+		find = false
+	} else if len(eles) == 1 {
+		max = eles[0]
+		find = true
+	} else {
+		b := eles[0]
+		for _, e := range eles[1:] {
+			if cmp(b, e) {
+				b = e
+			}
+		}
+		max = b
+		find = true
+	}
+
+	return
+}
+
+func MaxInt(arr []int) (min int, find bool) {
+	return Max[int](arr, func(i, j any) bool { return i.(int) < j.(int) })
+}
+
+func MinMax[T any](eles []T, cmp Less) (min, max T, find bool) {
+	if len(eles) == 0 {
+		find = false
+	} else if len(eles) == 1 {
+		min, max = eles[0], eles[0]
+		find = true
+	} else {
+		bmin := eles[0]
+		bmax := eles[0]
+		for _, e := range eles[1:] {
+			if !cmp(e, bmax) {
+				bmax = e
+			}
+			if cmp(e, bmin) {
+				bmin = e
+			}
+		}
+		min = bmin
+		max = bmax
+		find = true
+	}
+
+	return
+}
+
+func MinMaxInt(arr []int) (min, max int, find bool) {
+	return MinMax[int](arr, func(i, j any) bool { return i.(int) < j.(int) })
+}
