@@ -416,3 +416,29 @@ func MinMax[T any](eles []T, cmp Less) (min, max T, find bool) {
 func MinMaxInt(arr []int) (min, max int, find bool) {
 	return MinMax[int](arr, func(i, j any) bool { return i.(int) < j.(int) })
 }
+
+type ErrGroup struct {
+	errors []error
+}
+
+func NewErrGroup() *ErrGroup {
+	return &ErrGroup{
+		errors: make([]error, 0),
+	}
+}
+
+func (eg *ErrGroup) AddErrs(errs ...error) {
+	eg.errors = append(eg.errors, errs...)
+}
+
+func (eg *ErrGroup) IsNil() bool {
+	return len(eg.errors) == 0
+}
+
+func (eg *ErrGroup) Error() string {
+	sb := strings.Builder{}
+	for i, e := range eg.errors {
+		sb.WriteString(fmt.Sprintf("err_idx(%d) - err(%v)\n", i, e))
+	}
+	return sb.String()
+}

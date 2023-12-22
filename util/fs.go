@@ -2,13 +2,18 @@ package util
 
 import (
 	"container/heap"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
 	"os"
+	"path/filepath"
+	"sync/atomic"
 	"syscall"
+	"time"
 
 	"gitea.fcdm.top/lixuan/keen"
+	"gitea.fcdm.top/lixuan/keen/ylog2"
 )
 
 type FileSize int64
@@ -20,14 +25,6 @@ const (
 	GB         FileSize = 1024 * 1024 * 1024
 	WRITE_UNIT FileSize = 4 * KB
 )
-
-type SpaceNotEnoughErr struct {
-	Err error
-}
-
-func (e *SpaceNotEnoughErr) Error() string {
-	return "There is not enough space on the disk."
-}
 
 func FillFile(f *os.File, size FileSize) error {
 	const blockSize = 4096
@@ -56,26 +53,29 @@ func FillFile(f *os.File, size FileSize) error {
 	return nil
 }
 
-// CreateFixSizeFile 向硬盘申请固定大小的空间，如果申请失败返回error
-func CreateFixSizeFile(fn string, size FileSize) (*os.File, CleanFunc, error) {
-	f, err := os.Create(fn)
+// AllocateDisk 申请固定大小的磁盘空间，如果申请失败返回error，否则返回*os.File
+func AllocateDisk(filePath string, size FileSize) (*os.File, error) {
+	err := os.MkdirAll(filepath.Dir(filePath), os.ModeDir)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
+	}
+
+	f, err := os.Create(filePath)
+	if err != nil {
+		return nil, err
 	}
 
 	// 设置文件大小
 	if err := syscall.Ftruncate(syscall.Handle(f.Fd()), int64(size)); err != nil {
 		defer func() {
 			f.Close()
-			os.Remove(fn)
+			os.Remove(filePath)
 		}()
 
-		return nil, nil, err
+		return nil, err
 	}
 
-	return f, func() {
-		defer f.Close()
-	}, nil
+	return f, nil
 }
 
 func IsSpaceNotEnough(err error) bool {
@@ -98,17 +98,57 @@ func NewCopyTask(src, dst string) *CopyTask {
 }
 
 func (t CopyTask) String() string {
-	return fmt.Sprintf("Copy Task: source(%s) -> destination(%s)", t.Src, t.Dst)
+	return fmt.Sprintf("Copy Task: source(%s)|size(%d MB) -> destination(%s)", t.Src, t.Size/MB, t.Dst)
 }
 
-func SetupCopyTasks(tasks ...*CopyTask) error {
-	errCh := make(chan error)
+func (t *CopyTask) Clean() error {
+	eg := NewErrGroup()
+
+	if t.sFile != nil {
+		err := t.sFile.Close()
+		if err != nil {
+			eg.AddErrs(err)
+		}
+	}
+
+	if t.dFile != nil {
+		err := t.dFile.Close()
+		if err != nil {
+			eg.AddErrs(err)
+		}
+
+		err = os.Remove(t.Dst)
+		if err != nil {
+			eg.AddErrs(err)
+		}
+	}
+
+	if eg.IsNil() {
+		return nil
+	}
+
+	return eg
+}
+
+// SetupCopyTasks 初始化拷贝任务，打开所有的源文件、目标文件，包括获取文件大小，申请磁盘空间，如果出现错误，要保证所有的fd（file descriptor）被关闭
+func SetupCopyTasks(tasks []*CopyTask) error {
+	errCh := make(chan error, len(tasks))
+	var cl atomic.Int32
+	cl.Store(int32(len(tasks)))
 
 	for _, task := range tasks {
-		if task.Src == "" || task.Dst == "" {
-			errCh <- fmt.Errorf("source file (%s) or destination file (%s) is invalid", task.Src, task.Dst)
-		}
 		go func(t *CopyTask) {
+			defer func() {
+				if v := cl.Add(-1); v <= 0 {
+					close(errCh)
+				}
+			}()
+
+			if t.Src == "" || t.Dst == "" {
+				errCh <- fmt.Errorf("source file (%s) or destination file (%s) is invalid", task.Src, task.Dst)
+				return
+			}
+
 			rf, err := os.Open(t.Src)
 			if err != nil {
 				errCh <- err
@@ -121,7 +161,13 @@ func SetupCopyTasks(tasks ...*CopyTask) error {
 				return
 			}
 
-			df, _, err := CreateFixSizeFile(t.Dst, FileSize(fs)*B)
+			_, err = rf.Seek(0, io.SeekStart)
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			df, err := AllocateDisk(t.Dst, FileSize(fs)*B)
 			if err != nil {
 				errCh <- err
 				return
@@ -134,35 +180,32 @@ func SetupCopyTasks(tasks ...*CopyTask) error {
 		}(task)
 	}
 
-	var err error
-	clean := false
-	for err = range errCh {
+	eg := NewErrGroup()
+	for err := range errCh {
 		if err != nil {
-			clean = true
-			break
+			eg.errors = append(eg.errors, err)
 		}
 	}
 
-	if clean {
+	if !eg.IsNil() {
 		for _, t := range tasks {
-			if t.sFile != nil {
-				t.sFile.Close()
-			}
-			if t.dFile != nil {
-				err := os.Remove(t.Dst)
-				if err != nil {
-					keen.H(fmt.Sprintf("failed to delete newly created file [%s]: %v", t.Dst, err))
-				}
+			if err := t.Clean(); err != nil {
+				eg.AddErrs(err)
 			}
 		}
+		return eg
 	}
 
-	return err
+	return nil
 }
 
 type GroupCopyTask struct {
 	SizeSum FileSize
 	Tasks   []*CopyTask
+}
+
+func (gct GroupCopyTask) String() string {
+	return fmt.Sprintf("sum of file size(%d MB), task detail:\n%v", gct.SizeSum/MB, gct.Tasks)
 }
 
 type CopyTaskHeap []GroupCopyTask
@@ -191,26 +234,132 @@ func (h *CopyTaskHeap) Pop() any {
 	return x
 }
 
-func SplitTasksToNGroups(tasks []*CopyTask, minGroups int, maxGroups int) ([]GroupCopyTask, bool) {
+// SplitTasksToNGroups 为拷贝任务分组
+func SplitTasksToNGroups(tasks []*CopyTask, maxGroups uint) []GroupCopyTask {
 	// 如果tasks为0、1，那么直接返回GroupTask
 	// 如果tasks为2（min）~max中间的值，那么返回n个GroupTask
 	// 如果task大于max，那么开始尝试分组（贪心）
-	if minGroups < 1 || maxGroups > 8 {
-		return nil, false
+	tasksNum := len(tasks)
+	if tasksNum <= 0 {
+		return []GroupCopyTask{}
+	} else if tasksNum <= 1 {
+		t := tasks[0]
+		return []GroupCopyTask{GroupCopyTask{t.Size, []*CopyTask{t}}}
+	} else if tasksNum <= int(maxGroups) {
+		g := make([]GroupCopyTask, 0, tasksNum)
+		for i := 0; i < tasksNum; i++ {
+			ct := tasks[i]
+			g[i] = GroupCopyTask{ct.Size, []*CopyTask{ct}}
+		}
+		return g
+	} else {
+		var hpd CopyTaskHeap = make([]GroupCopyTask, 0)
+		for i := 0; i < int(maxGroups); i++ {
+			hpd = append(hpd, GroupCopyTask{0, make([]*CopyTask, 0)})
+		}
+
+		hp := &hpd
+		heap.Init(hp)
+		for _, t := range tasks {
+			gt := heap.Pop(hp).(GroupCopyTask)
+			gt.SizeSum += t.Size
+			gt.Tasks = append(gt.Tasks, t)
+			heap.Push(hp, gt)
+		}
+
+		return []GroupCopyTask(hpd)
+	}
+}
+
+func ExecGroupCopyTasks(gtasks []GroupCopyTask, buffer int) error {
+	errCh := make(chan error, len(gtasks))
+	haltCh := make(chan struct{}, len(gtasks))
+	defer close(haltCh)
+	var gl atomic.Int32
+	gl.Store(int32(len(gtasks)))
+
+	for _, gt := range gtasks {
+		go func(gt GroupCopyTask) {
+			defer func() {
+				if gl.Add(-1) <= 0 {
+					close(errCh)
+				}
+			}()
+
+			var (
+				err    error
+				isErr  bool = false
+				isHalt bool = false
+			)
+			buf := make([]byte, buffer)
+
+		out:
+			for _, subT := range gt.Tasks {
+				keen.Log.Debug("[%s -> %s]start to copy file...", subT.Src, subT.Dst)
+				st := time.Now()
+				keen.Log.Debug("[%s -> %s]starttime: %s", subT.Src, subT.Dst, st.Format(ylog2.LOG_TIME_FMT))
+			inner:
+				for {
+					_, err = subT.sFile.Read(buf)
+					if err != nil {
+						if errors.Is(err, io.EOF) {
+							break
+						}
+						isErr = true
+						haltCh <- struct{}{}
+						break out
+					}
+
+					_, err = subT.dFile.Write(buf)
+					if err != nil {
+						isErr = true
+						haltCh <- struct{}{}
+						break out
+					}
+
+					select {
+					case <-haltCh:
+						{
+							isHalt = true
+							break inner
+						}
+					default:
+						continue inner
+					}
+				}
+
+				subT.sFile.Sync()
+				subT.dFile.Sync()
+				subT.sFile.Close()
+				subT.dFile.Close()
+				et := time.Now()
+				keen.Log.Debug("[%s -> %s]endtime: %s, elapse time: %.2f(s)", subT.Src, subT.Dst, et.Format(ylog2.LOG_TIME_FMT), et.Sub(st).Seconds())
+			}
+
+			if isErr || isHalt {
+				for _, subT := range gt.Tasks {
+					err := subT.Clean()
+					if err != nil {
+						keen.Log.Error("failed to clean the copy task ([%s]-[%s]) while the error occurred: %v", subT.Src, subT.Dst, err)
+					}
+				}
+				if isErr {
+					errCh <- err
+				}
+			}
+		}(gt)
 	}
 
-	var ini CopyTaskHeap = make([]GroupCopyTask, 0)
-	for i := 0; i < minGroups; i++ {
-		ini = append(ini, GroupCopyTask{0, make([]*CopyTask, 0)})
+	eg := NewErrGroup()
+	for err := range errCh {
+		if err != nil {
+			eg.AddErrs(err)
+		}
 	}
 
-	heap.Init(&ini)
-	for _, t := range tasks {
-		gt := heap.Pop(&ini).(GroupCopyTask)
-		gt.SizeSum += t.Size
-		gt.Tasks = append(gt.Tasks, t)
-		heap.Push(&ini, gt)
+	if eg.IsNil() {
+		return nil
 	}
 
-	return nil, true
+	return eg
 }

@@ -1,15 +1,6 @@
 package keen
 
-type UtilRecord func(string)
+import "gitea.fcdm.top/lixuan/keen/ylog2"
 
-var H UtilRecord = func(s string) {
-	println(s)
-}
-
-func Mute() {
-	H = func(s string) {}
-}
-
-func Custom(rcd UtilRecord) {
-	H = rcd
-}
+var consoleWriter ylog2.ConsoleWriter = *ylog2.NewConsoleWriter(func(i int8) bool { return i >= ylog2.DEBUG }, false)
+var Log ylog2.Logger = ylog2.NewLogger(&consoleWriter)

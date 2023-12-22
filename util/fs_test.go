@@ -6,21 +6,46 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"gitea.fcdm.top/lixuan/keen/util"
 )
 
-func TestCreateFixSizeFile(t *testing.T) {
-	fn := "./xx"
-	_, clean, err := util.CreateFixSizeFile(fn, 1000*util.GB)
+func TestAllocateDisk(t *testing.T) {
+	fn := "./xx1"
+	f, err := util.AllocateDisk(fn, 1000*util.MB)
+	if err != nil {
+		t.Errorf("failed to create file: %v", err)
+	}
+
+	if fi, err := f.Stat(); err != nil {
+		t.Error(err)
+	} else {
+		if util.FileSize(fi.Size()) != 1000*util.MB {
+			t.FailNow()
+		}
+	}
+
+	f.Close()
+	os.Remove(fn)
+}
+
+func TestAllocateDiskOutOfSpace(t *testing.T) {
+	fn := "./xx2"
+	f, err := util.AllocateDisk(fn, 1000*util.GB)
 	if err != nil {
 		if util.IsSpaceNotEnough(err) {
 			t.SkipNow()
+		} else {
+			t.FailNow()
 		}
-		t.Errorf("failed to create file: %v", err)
 	}
-	defer clean()
+	defer func() {
+		f.Close()
+		os.Remove(fn)
+	}()
+	t.FailNow()
 }
 
 func TestCopyTaskHeap(t *testing.T) {
@@ -70,34 +95,47 @@ func TestCopy(t *testing.T) {
 	}
 
 	tasks := make([]*util.CopyTask, 0)
-	cleans := make([]util.CleanFunc, 0)
-	defer func() {
-		for _, clean := range cleans {
-			clean()
-		}
-	}()
 
 	for i := 0; i < 10; i++ {
 		curF := filepath.Join(SRC, SRCF+strconv.Itoa(i))
 		df := filepath.Join(DST, DSTF+strconv.Itoa(i))
-		// rd := 512*util.MB + util.FileSize(rand.Int63n(int64(512*util.MB+1)))
-		// f, clean, err := util.CreateFixSizeFile(curF, rd)
-		// if err != nil {
-		// 	t.Error(err)
-		// }
-		// cleans = append(cleans, clean)
 
-		// err = util.FillFile(f, rd)
-		// if err != nil {
-		// 	t.Error(err)
-		// }
-
-		tasks = append(tasks, util.NewCopyTask(curF, df))
+		t := util.NewCopyTask(curF, df)
+		tasks = append(tasks, t)
 	}
 
-	// util.SetupCopyTasks(nt)
+	err = util.SetupCopyTasks(tasks)
+	if err != nil {
+		t.Errorf("failed to setup task:\n  %v", err)
+	}
 
 	for _, xt := range tasks {
 		t.Log("task:", xt)
+	}
+	t.Log(strings.Repeat("=", 100))
+	gct := util.SplitTasksToNGroups(tasks, 4)
+	for _, g := range gct {
+		t.Log("task group:", g)
+	}
+
+	t.Log(strings.Repeat("=", 100))
+	err = util.ExecGroupCopyTasks(gct, 8096)
+	if err != nil {
+		t.Logf("failed to execute copy task:\n  %v", err)
+	}
+}
+
+func TestTempCopy(t *testing.T) {
+	tk := util.NewCopyTask("SRC/src_0", "DST/dst_0")
+	tks := make([]*util.CopyTask, 0)
+	tks = append(tks, tk)
+	err := util.SetupCopyTasks(tks)
+	if err != nil {
+		t.Log(err)
+	}
+	gtk := util.SplitTasksToNGroups(tks, 4)
+	err = util.ExecGroupCopyTasks(gtk, 8096)
+	if err != nil {
+		t.Log(err)
 	}
 }

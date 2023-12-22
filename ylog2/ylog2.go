@@ -11,7 +11,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"gitea.fcdm.top/lixuan/keen/util"
 	"github.com/fatih/color"
 )
 
@@ -350,7 +349,8 @@ func (log *Logger) Error(msg string, args ...any) {
 func (log *Logger) Fatal(msg string, args ...any) {
 	msg = groupInfo(FATAL, msg, args...)
 	log.log(LogMessage{FATAL, msg})
-	util.ExitWith(1, log.Clean)
+	log.Clean()
+	os.Exit(1)
 }
 
 func (log *Logger) Clean() {
