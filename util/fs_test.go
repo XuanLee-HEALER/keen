@@ -107,13 +107,14 @@ func TestCopy(t *testing.T) {
 	err = util.SetupCopyTasks(tasks)
 	if err != nil {
 		t.Errorf("failed to setup task:\n  %v", err)
+		t.FailNow()
 	}
 
 	for _, xt := range tasks {
 		t.Log("task:", xt)
 	}
 	t.Log(strings.Repeat("=", 100))
-	gct := util.SplitTasksToNGroups(tasks, 4)
+	gct := util.SplitTasksToNGroups(tasks, 1)
 	for _, g := range gct {
 		t.Log("task group:", g)
 	}
@@ -125,17 +126,65 @@ func TestCopy(t *testing.T) {
 	}
 }
 
-func TestTempCopy(t *testing.T) {
-	tk := util.NewCopyTask("SRC/src_0", "DST/dst_0")
-	tks := make([]*util.CopyTask, 0)
-	tks = append(tks, tk)
-	err := util.SetupCopyTasks(tks)
+func TestCopyHalt(t *testing.T) {
+	const (
+		SRC  = "SRC"
+		DST  = "D:\\DST"
+		SRCF = "src_"
+		DSTF = "dst_"
+	)
+
+	_, err := os.Stat(SRC)
 	if err != nil {
-		t.Log(err)
+		if os.IsNotExist(err) {
+			os.MkdirAll(SRC, os.ModeDir)
+		} else {
+			t.Error(err)
+		}
 	}
-	gtk := util.SplitTasksToNGroups(tks, 4)
-	err = util.ExecGroupCopyTasks(gtk, 8096)
+
+	matches, err := filepath.Glob(filepath.Join(SRC, "*"))
 	if err != nil {
-		t.Log(err)
+		t.Error(err)
+	}
+
+	if len(matches) == 0 {
+		for _, f := range matches {
+			err := os.RemoveAll(f)
+			if err != nil {
+				t.Logf("failed to remove file/directory [%s]: %v", f, err)
+			}
+		}
+	}
+
+	tasks := make([]*util.CopyTask, 0)
+
+	for i := 0; i < 10; i++ {
+		curF := filepath.Join(SRC, SRCF+strconv.Itoa(i))
+		df := filepath.Join(DST, DSTF+strconv.Itoa(i))
+
+		t := util.NewCopyTask(curF, df)
+		tasks = append(tasks, t)
+	}
+
+	err = util.SetupCopyTasks(tasks)
+	if err != nil {
+		t.Errorf("failed to setup task:\n  %v", err)
+		t.FailNow()
+	}
+
+	for _, xt := range tasks {
+		t.Log("task:", xt)
+	}
+	t.Log(strings.Repeat("=", 100))
+	gct := util.SplitTasksToNGroups(tasks, 1)
+	for _, g := range gct {
+		t.Log("task group:", g)
+	}
+
+	t.Log(strings.Repeat("=", 100))
+	err = util.ExecGroupCopyTasks(gct, 8096)
+	if err != nil {
+		t.Logf("failed to execute copy task:\n  %v", err)
 	}
 }

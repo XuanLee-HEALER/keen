@@ -8,6 +8,8 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -132,6 +134,10 @@ func (t *CopyTask) Clean() error {
 
 // SetupCopyTasks 初始化拷贝任务，打开所有的源文件、目标文件，包括获取文件大小，申请磁盘空间，如果出现错误，要保证所有的fd（file descriptor）被关闭
 func SetupCopyTasks(tasks []*CopyTask) error {
+	if len(tasks) <= 0 {
+		return errors.New("no task to setup")
+	}
+
 	errCh := make(chan error, len(tasks))
 	var cl atomic.Int32
 	cl.Store(int32(len(tasks)))
@@ -236,6 +242,10 @@ func (h *CopyTaskHeap) Pop() any {
 
 // SplitTasksToNGroups 为拷贝任务分组
 func SplitTasksToNGroups(tasks []*CopyTask, maxGroups uint) []GroupCopyTask {
+	if maxGroups >= 16 {
+		keen.Log.Warn("The maximum number of concurrent tasks is set to 16")
+		maxGroups = 16
+	}
 	// 如果tasks为0、1，那么直接返回GroupTask
 	// 如果tasks为2（min）~max中间的值，那么返回n个GroupTask
 	// 如果task大于max，那么开始尝试分组（贪心）
@@ -287,6 +297,7 @@ func ExecGroupCopyTasks(gtasks []GroupCopyTask, buffer int) error {
 			}()
 
 			var (
+				n      int
 				err    error
 				isErr  bool = false
 				isHalt bool = false
@@ -300,17 +311,17 @@ func ExecGroupCopyTasks(gtasks []GroupCopyTask, buffer int) error {
 				keen.Log.Debug("[%s -> %s]starttime: %s", subT.Src, subT.Dst, st.Format(ylog2.LOG_TIME_FMT))
 			inner:
 				for {
-					_, err = subT.sFile.Read(buf)
+					n, err = subT.sFile.Read(buf)
 					if err != nil {
 						if errors.Is(err, io.EOF) {
-							break
+							break inner
 						}
 						isErr = true
 						haltCh <- struct{}{}
 						break out
 					}
 
-					_, err = subT.dFile.Write(buf)
+					_, err = subT.dFile.Write(buf[:n])
 					if err != nil {
 						isErr = true
 						haltCh <- struct{}{}
@@ -328,7 +339,6 @@ func ExecGroupCopyTasks(gtasks []GroupCopyTask, buffer int) error {
 					}
 				}
 
-				subT.sFile.Sync()
 				subT.dFile.Sync()
 				subT.sFile.Close()
 				subT.dFile.Close()
@@ -362,4 +372,34 @@ func ExecGroupCopyTasks(gtasks []GroupCopyTask, buffer int) error {
 	}
 
 	return eg
+}
+
+type StateQuery struct {
+	cond *int16
+	mut  *sync.Mutex
+}
+
+func NewStateQuery() StateQuery {
+	var (
+		i int16       = 0
+		m *sync.Mutex = new(sync.Mutex)
+	)
+	return StateQuery{
+		&i, m,
+	}
+}
+
+func (q StateQuery) SetState(idx int, state bool) {
+	if idx > 16 || idx < 0 {
+		panic("illegal index: " + strconv.Itoa(idx))
+	}
+	var xi int16
+	if state {
+		xi = 1 << idx
+	}
+
+	q.mut.Lock()
+	defer q.mut.Unlock()
+
+	*q.cond ^= xi
 }
