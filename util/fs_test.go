@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"gitea.fcdm.top/lixuan/keen/util"
 )
@@ -187,4 +189,53 @@ func TestCopyHalt(t *testing.T) {
 	if err != nil {
 		t.Logf("failed to execute copy task:\n  %v", err)
 	}
+}
+
+func TestTaskMonitor(t *testing.T) {
+	tm, err := util.NewTaskMonitor(10, 3)
+	if err != nil {
+		t.Error(err)
+	}
+
+	res := make(chan []util.TaskStateSummaryMsg)
+	tm.Register(res)
+	go tm.Run()
+
+	wg := new(sync.WaitGroup)
+	wg.Add(10)
+	for i := 0; i < 10; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			st := 1 + rand.Intn(5)
+			time.Sleep(time.Duration(st) * time.Second)
+
+			ot := rand.Intn(10)
+			var tr bool
+			if ot <= 4 {
+				tr = false
+				err := tm.Send(util.TaskStateMsg{idx, false})
+				if err != nil {
+					t.Logf("%d send error: %v", idx, err)
+					return
+				}
+			} else {
+				tr = true
+				err := tm.Send(util.TaskStateMsg{idx, true})
+				if err != nil {
+					t.Logf("%d send error: %v", idx, err)
+					return
+				}
+			}
+
+			t.Logf("%d - %t\n", idx, tr)
+		}(i)
+	}
+
+	for r := range res {
+		_, _, rep := util.Report(r)
+		t.Logf("\n%s\n", rep)
+	}
+
+	// clean()
+	wg.Wait()
 }
