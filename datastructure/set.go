@@ -35,6 +35,10 @@ func (set Set[T]) Add(t T) {
 	set[t] = struct{}{}
 }
 
+func (set Set[T]) Del(t T) {
+	delete(set, t)
+}
+
 func (set Set[T]) AddList(ts []T) {
 	for _, t := range ts {
 		set.Add(t)
