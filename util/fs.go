@@ -281,15 +281,24 @@ func SplitTasksToNGroups(tasks []*CopyTask, maxGroups uint) []GroupCopyTask {
 	}
 }
 
-func ExecGroupCopyTasks(gtasks []GroupCopyTask, buffer int) error {
-	errCh := make(chan error, len(gtasks))
-	haltCh := make(chan struct{}, len(gtasks))
-	defer close(haltCh)
+func ExecGroupCopyTasks(gtasks []GroupCopyTask, buffer int, ot int64) error {
+	l := len(gtasks)
+	errCh := make(chan error, l)
 	var gl atomic.Int32
-	gl.Store(int32(len(gtasks)))
+	gl.Store(int32(l))
 
-	for _, gt := range gtasks {
-		go func(gt GroupCopyTask) {
+	tm, err := NewTaskMonitor(l, ot)
+	if err != nil {
+		return err
+	}
+
+	resCh := make(chan []TaskStateSummaryMsg)
+	tm.Register(resCh)
+
+	go tm.Run()
+
+	for i, gt := range gtasks {
+		go func(idx int, gt GroupCopyTask) {
 			defer func() {
 				if gl.Add(-1) <= 0 {
 					close(errCh)
@@ -302,6 +311,7 @@ func ExecGroupCopyTasks(gtasks []GroupCopyTask, buffer int) error {
 				isErr  bool = false
 				isHalt bool = false
 			)
+
 			buf := make([]byte, buffer)
 
 		out:
@@ -317,26 +327,24 @@ func ExecGroupCopyTasks(gtasks []GroupCopyTask, buffer int) error {
 							break inner
 						}
 						isErr = true
-						haltCh <- struct{}{}
 						break out
 					}
 
 					_, err = subT.dFile.Write(buf[:n])
 					if err != nil {
 						isErr = true
-						haltCh <- struct{}{}
 						break out
 					}
 
-					select {
-					case <-haltCh:
-						{
-							isHalt = true
-							break inner
-						}
-					default:
-						continue inner
-					}
+					// select {
+					// case <-haltCh:
+					// 	{
+					// 		isHalt = true
+					// 		break inner
+					// 	}
+					// default:
+					continue inner
+					// }
 				}
 
 				subT.dFile.Sync()
@@ -357,8 +365,10 @@ func ExecGroupCopyTasks(gtasks []GroupCopyTask, buffer int) error {
 					errCh <- err
 				}
 			}
-		}(gt)
+		}(i, gt)
 	}
+
+	// for range tm.Register()
 
 	eg := NewErrGroup()
 	for err := range errCh {
@@ -460,7 +470,7 @@ func (tm *TaskMonitor) Run() {
 	} else {
 		for tms := range tm.setter {
 			ccounter--
-			tm.SetState(tms)
+			tm.setState(tms)
 			res[tms.Idx] = TaskStateSummaryMsg{State: tms.State}
 			if ccounter == 0 {
 				break
@@ -479,7 +489,7 @@ func (tm *TaskMonitor) subscribe(summary []TaskStateSummaryMsg) {
 	close(tm.setter)
 }
 
-func (tm *TaskMonitor) SetState(tsm TaskStateMsg) {
+func (tm *TaskMonitor) setState(tsm TaskStateMsg) {
 	var xi int16
 	if tsm.State {
 		xi = 1 << tsm.Idx
