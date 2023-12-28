@@ -8,13 +8,11 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
 	"gitea.fcdm.top/lixuan/keen"
-	"gitea.fcdm.top/lixuan/keen/datastructure"
 	"gitea.fcdm.top/lixuan/keen/ylog2"
 )
 
@@ -382,136 +380,4 @@ func ExecGroupCopyTasks(gtasks []GroupCopyTask, buffer int, ot int64) error {
 	}
 
 	return eg
-}
-
-// TaskMonitor 任务监视器，适用场景为，有一组固定数量的任务，它们的执行结果分为成功或失败，当任务监视器启动（通常在一个独立的goroutine），它会接收任务传递的执行结果，当所有任务都汇报自己的执行结果后，监视器向注册的接收者广播结果/错误，并且清理自身资源。（可选）初始化一个计时器，当超时后，若仍然有任务未报告执行结果，则传递超时信息，并且清理资源
-type TaskMonitor struct {
-	counter     int
-	stateTable  int16
-	subscribers []chan<- []TaskStateSummaryMsg
-	setter      chan TaskStateMsg
-	overtime    int64
-	mut         *sync.Mutex
-}
-
-type TaskStateMsg struct {
-	Idx   int
-	State bool
-}
-
-type TaskStateSummaryMsg struct {
-	Overtime bool
-	State    bool
-}
-
-func Report(ms []TaskStateSummaryMsg) ([]int, []bool, string) {
-	o, s := make([]int, 0), make([]bool, len(ms))
-	for i, m := range ms {
-		if m.Overtime {
-			o = append(o, i)
-		} else {
-			s[i] = m.State
-		}
-	}
-	return o, s, fmt.Sprintf("Overtime: %v\nState set successfully: %v\n", o, s)
-}
-
-func NewTaskMonitor(n int, t int64) (*TaskMonitor, error) {
-	if n < 0 || n > 16 {
-		return nil, fmt.Errorf("the number of tasks is limited to (1~16)")
-	}
-	return &TaskMonitor{
-		counter:     n,
-		stateTable:  0,
-		subscribers: make([]chan<- []TaskStateSummaryMsg, 0),
-		setter:      make(chan TaskStateMsg, n),
-		overtime:    t,
-		mut:         new(sync.Mutex),
-	}, nil
-}
-
-func (tm *TaskMonitor) Run() {
-	res := make([]TaskStateSummaryMsg, tm.counter)
-	ccounter := tm.counter
-	if tm.overtime > 0 {
-		rm := make(datastructure.Set[int])
-		for i := 0; i < tm.counter; i++ {
-			rm.Add(i)
-		}
-		curTimer := time.NewTimer(time.Duration(tm.overtime) * time.Second)
-		for {
-			select {
-			case <-curTimer.C:
-				{
-					for ri := range rm {
-						res[ri] = TaskStateSummaryMsg{Overtime: true}
-					}
-
-					tm.subscribe(res)
-					break
-				}
-			case tsm := <-tm.setter:
-				{
-					ccounter--
-					res[tsm.Idx] = TaskStateSummaryMsg{State: tsm.State}
-
-					rm.Del(tsm.Idx)
-					if ccounter == 0 {
-						if b := curTimer.Stop(); !b {
-							<-curTimer.C
-						}
-
-						tm.subscribe(res)
-						break
-					}
-				}
-			}
-		}
-	} else {
-		for tms := range tm.setter {
-			ccounter--
-			tm.setState(tms)
-			res[tms.Idx] = TaskStateSummaryMsg{State: tms.State}
-			if ccounter == 0 {
-				break
-			}
-		}
-
-		tm.subscribe(res)
-	}
-}
-
-func (tm *TaskMonitor) subscribe(summary []TaskStateSummaryMsg) {
-	for _, ch := range tm.subscribers {
-		ch <- summary
-		close(ch)
-	}
-	close(tm.setter)
-}
-
-func (tm *TaskMonitor) setState(tsm TaskStateMsg) {
-	var xi int16
-	if tsm.State {
-		xi = 1 << tsm.Idx
-	}
-
-	tm.mut.Lock()
-	defer tm.mut.Unlock()
-
-	tm.stateTable ^= xi
-}
-
-func (tm *TaskMonitor) Register(ch ...chan<- []TaskStateSummaryMsg) {
-	tm.subscribers = append(tm.subscribers, ch...)
-}
-
-func (tm TaskMonitor) Send(msg TaskStateMsg) (err error) {
-	defer func() {
-		if xerr := recover(); xerr != nil {
-			err = xerr.(error)
-		}
-	}()
-
-	tm.setter <- msg
-	return
 }

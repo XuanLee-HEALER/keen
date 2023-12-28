@@ -122,7 +122,7 @@ func TestCopy(t *testing.T) {
 	}
 
 	t.Log(strings.Repeat("=", 100))
-	err = util.ExecGroupCopyTasks(gct, 8096)
+	err = util.ExecGroupCopyTasks(gct, 8096, 10)
 	if err != nil {
 		t.Logf("failed to execute copy task:\n  %v", err)
 	}
@@ -185,7 +185,7 @@ func TestCopyHalt(t *testing.T) {
 	}
 
 	t.Log(strings.Repeat("=", 100))
-	err = util.ExecGroupCopyTasks(gct, 8096)
+	err = util.ExecGroupCopyTasks(gct, 8096, 10)
 	if err != nil {
 		t.Logf("failed to execute copy task:\n  %v", err)
 	}
