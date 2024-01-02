@@ -213,6 +213,7 @@ type Task interface {
 	Priority() ExecutionPriority
 	Params() []any
 	Do(chan<- string, chan<- int) (<-chan any, <-chan error)
+	Ratio()
 	Clean() error
 }
 
