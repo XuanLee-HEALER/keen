@@ -7,11 +7,10 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"sync/atomic"
-	"time"
 
 	"gitea.fcdm.top/lixuan/keen"
-	"gitea.fcdm.top/lixuan/keen/ylog2"
 )
 
 type FileSize int64
@@ -23,6 +22,26 @@ const (
 	GB         FileSize = 1024 * 1024 * 1024
 	WRITE_UNIT FileSize = 4 * KB
 )
+
+func PathExists(path string) bool {
+	_, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func IsDir(path string) bool {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+
+	return fi.IsDir()
+}
 
 func FillFile(f *os.File, size FileSize) error {
 	const blockSize = 4096
@@ -252,105 +271,142 @@ func SplitTasksToNGroups(tasks []*CopyTask, maxGroups uint) []GroupCopyTask {
 	}
 }
 
-func ExecGroupCopyTasks(gtasks []GroupCopyTask, buffer int, ot int64) error {
-	l := len(gtasks)
-	errCh := make(chan error, l)
-	var gl atomic.Int32
-	gl.Store(int32(l))
-
-	tm, err := NewTaskMonitor(l, ot)
+// RemoveChildren 删除目录下所有的子项，不包括目录自身
+func RemoveChildren(path string) error {
+	path = filepath.Join(path, "*")
+	matches, err := filepath.Glob(path)
 	if err != nil {
 		return err
 	}
 
-	resCh := make(chan []TaskStateSummaryMsg)
-	tm.Register(resCh)
-
-	go tm.Run()
-
-	for i, gt := range gtasks {
-		go func(idx int, gt GroupCopyTask) {
-			defer func() {
-				if gl.Add(-1) <= 0 {
-					close(errCh)
-				}
-			}()
-
-			var (
-				n      int
-				err    error
-				isErr  bool = false
-				isHalt bool = false
-			)
-
-			buf := make([]byte, buffer)
-
-		out:
-			for _, subT := range gt.Tasks {
-				keen.Log.Debug("[%s -> %s]start to copy file...", subT.Src, subT.Dst)
-				st := time.Now()
-				keen.Log.Debug("[%s -> %s]starttime: %s", subT.Src, subT.Dst, st.Format(ylog2.LOG_TIME_FMT))
-			inner:
-				for {
-					n, err = subT.sFile.Read(buf)
-					if err != nil {
-						if errors.Is(err, io.EOF) {
-							break inner
-						}
-						isErr = true
-						break out
-					}
-
-					_, err = subT.dFile.Write(buf[:n])
-					if err != nil {
-						isErr = true
-						break out
-					}
-
-					// select {
-					// case <-haltCh:
-					// 	{
-					// 		isHalt = true
-					// 		break inner
-					// 	}
-					// default:
-					continue inner
-					// }
-				}
-
-				subT.dFile.Sync()
-				subT.sFile.Close()
-				subT.dFile.Close()
-				et := time.Now()
-				keen.Log.Debug("[%s -> %s]endtime: %s, elapse time: %.2f(s)", subT.Src, subT.Dst, et.Format(ylog2.LOG_TIME_FMT), et.Sub(st).Seconds())
-			}
-
-			if isErr || isHalt {
-				for _, subT := range gt.Tasks {
-					err := subT.Clean()
-					if err != nil {
-						keen.Log.Error("failed to clean the copy task ([%s]-[%s]) while the error occurred: %v", subT.Src, subT.Dst, err)
-					}
-				}
-				if isErr {
-					errCh <- err
-				}
-			}
-		}(i, gt)
-	}
-
-	// for range tm.Register()
-
-	eg := NewErrGroup()
-	for err := range errCh {
+	for _, f := range matches {
+		err := os.RemoveAll(f)
 		if err != nil {
-			eg.AddErrs(err)
+			return err
 		}
 	}
 
-	if eg.IsNil() {
-		return nil
+	return nil
+}
+
+// RemoveChildren 删除目录下所有的子项，不包括目录自身
+func RemoveChildrenWithError(path string) error {
+	errg := NewErrGroup()
+	path = filepath.Join(path, "*")
+	matches, err := filepath.Glob(path)
+	if err != nil {
+		return err
 	}
 
-	return eg
+	for _, f := range matches {
+		err := os.RemoveAll(f)
+		if err != nil {
+			errg.AddErrs(err)
+		}
+	}
+
+	return errg
 }
+
+// func ExecGroupCopyTasks(gtasks []GroupCopyTask, buffer int, ot int64) error {
+// 	l := len(gtasks)
+// 	errCh := make(chan error, l)
+// 	var gl atomic.Int32
+// 	gl.Store(int32(l))
+
+// 	tm, err := NewTaskMonitor(l, ot)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	resCh := make(chan []TaskStateSummaryMsg)
+// 	tm.Register(resCh)
+
+// 	go tm.Run()
+
+// 	for i, gt := range gtasks {
+// 		go func(idx int, gt GroupCopyTask) {
+// 			defer func() {
+// 				if gl.Add(-1) <= 0 {
+// 					close(errCh)
+// 				}
+// 			}()
+
+// 			var (
+// 				n      int
+// 				err    error
+// 				isErr  bool = false
+// 				isHalt bool = false
+// 			)
+
+// 			buf := make([]byte, buffer)
+
+// 		out:
+// 			for _, subT := range gt.Tasks {
+// 				keen.Log.Debug("[%s -> %s]start to copy file...", subT.Src, subT.Dst)
+// 				st := time.Now()
+// 				keen.Log.Debug("[%s -> %s]starttime: %s", subT.Src, subT.Dst, st.Format(ylog2.LOG_TIME_FMT))
+// 			inner:
+// 				for {
+// 					n, err = subT.sFile.Read(buf)
+// 					if err != nil {
+// 						if errors.Is(err, io.EOF) {
+// 							break inner
+// 						}
+// 						isErr = true
+// 						break out
+// 					}
+
+// 					_, err = subT.dFile.Write(buf[:n])
+// 					if err != nil {
+// 						isErr = true
+// 						break out
+// 					}
+
+// 					// select {
+// 					// case <-haltCh:
+// 					// 	{
+// 					// 		isHalt = true
+// 					// 		break inner
+// 					// 	}
+// 					// default:
+// 					continue inner
+// 					// }
+// 				}
+
+// 				subT.dFile.Sync()
+// 				subT.sFile.Close()
+// 				subT.dFile.Close()
+// 				et := time.Now()
+// 				keen.Log.Debug("[%s -> %s]endtime: %s, elapse time: %.2f(s)", subT.Src, subT.Dst, et.Format(ylog2.LOG_TIME_FMT), et.Sub(st).Seconds())
+// 			}
+
+// 			if isErr || isHalt {
+// 				for _, subT := range gt.Tasks {
+// 					err := subT.Clean()
+// 					if err != nil {
+// 						keen.Log.Error("failed to clean the copy task ([%s]-[%s]) while the error occurred: %v", subT.Src, subT.Dst, err)
+// 					}
+// 				}
+// 				if isErr {
+// 					errCh <- err
+// 				}
+// 			}
+// 		}(i, gt)
+// 	}
+
+// 	// for range tm.Register()
+
+// 	eg := NewErrGroup()
+// 	for err := range errCh {
+// 		if err != nil {
+// 			eg.AddErrs(err)
+// 		}
+// 	}
+
+// 	if eg.IsNil() {
+// 		return nil
+// 	}
+
+// 	return eg
+// }

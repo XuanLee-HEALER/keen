@@ -14,14 +14,20 @@ type Nation struct {
 	Name string
 }
 
+func NewNation(id uint8, name string) Nation {
+	return Nation{
+		id, name,
+	}
+}
+
 const (
 	SUPPORTED_LINGUAL uint8 = 0xFF
 )
 
 type display struct {
-	name        string
-	desc        string
-	optionsName map[string]string
+	name    string
+	desc    string
+	options map[string]string
 }
 
 type LangPackage struct {
@@ -47,10 +53,8 @@ func (pkg LangPackage) String() string {
 		w.WriteString(fmt.Sprintf("%s\n", pkg.nations[id].Name))
 		for k, display := range pkg.displays[id] {
 			w.WriteString(fmt.Sprintf("OriName: %s\tName: %s\tDesc: %s\n", k, display.name, display.desc))
-			if display.optionsName != nil {
-				for k, v := range display.optionsName {
-					w.WriteString(fmt.Sprintf("%s -> %s\n", v, k))
-				}
+			if display.options != nil {
+				w.WriteString(fmt.Sprintf("Option: %v", display.options))
 			}
 		}
 		w.WriteString("\n")
@@ -64,16 +68,12 @@ func (pkg LangPackage) ApplyMultiLingual(defaultNation Nation, config *model.Con
 
 	config.Desc = pkg.displays[defaultNation.ID][config.Name].desc
 
-	if config.InputType != "timeRange" {
-		config.Options = pkg.displays[defaultNation.ID][config.Name].optionsName
-	}
-
 	for id := range pkg.savedIds {
 		curDisplay := pkg.displays[id][config.Name]
 		config.I18n[pkg.nations[id].Name] = model.ConfigI18n{
 			Name:    curDisplay.name,
 			Desc:    curDisplay.desc,
-			Options: curDisplay.optionsName,
+			Options: curDisplay.options,
 		}
 	}
 }
@@ -105,14 +105,14 @@ func (pkg *LangPackage) AddNation(nations ...Nation) error {
 	return nil
 }
 
-func (pkg *LangPackage) AddDisplay(nation Nation, oriName, name, desc string, optionsName map[string]string) error {
+func (pkg *LangPackage) AddDisplay(nation Nation, oriName, name, desc string, options map[string]string) error {
 	if pkg.NationExist(nation) {
 		if pkg.displays[nation.ID] == nil {
 			pkg.displays[nation.ID] = map[string]display{
-				oriName: display{name, desc, optionsName},
+				oriName: display{name, desc, options},
 			}
 		} else {
-			pkg.displays[nation.ID][oriName] = display{name, desc, optionsName}
+			pkg.displays[nation.ID][oriName] = display{name, desc, options}
 		}
 
 		return nil

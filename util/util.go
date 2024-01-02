@@ -87,24 +87,6 @@ func MbToByte(mb string) uint64 {
 	return uint64(math.Floor(n))
 }
 
-// RemoveChildren 删除目录下所有的子项，不包括目录自身
-func RemoveChildren(path string) error {
-	path = filepath.Join(path, "*")
-	matches, err := filepath.Glob(path)
-	if err != nil {
-		return err
-	}
-
-	for _, f := range matches {
-		err := os.RemoveAll(f)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func xmin(a, b int) int {
 	if a < b {
 		return a
@@ -141,17 +123,6 @@ func CreateScript(name string, content []byte) (string, error) {
 	}
 
 	return name, nil
-}
-
-// PathExists 判断路径是否存在
-func PathExists(path string) bool {
-	_, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
-	}
-	return true
 }
 
 // ToJsonFile 將Json内容打印到文件
@@ -433,6 +404,13 @@ func (eg *ErrGroup) AddErrs(errs ...error) {
 
 func (eg *ErrGroup) IsNil() bool {
 	return len(eg.errors) == 0
+}
+
+func (eg *ErrGroup) Err() error {
+	if eg.IsNil() {
+		return nil
+	}
+	return eg
 }
 
 func (eg *ErrGroup) Error() string {

@@ -7,12 +7,28 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
-	"time"
 
 	"gitea.fcdm.top/lixuan/keen/util"
+	"github.com/stretchr/testify/assert"
 )
+
+func TestPathExists(t *testing.T) {
+	pwd, err := os.Getwd()
+	assert.Empty(t, err, "failed to get current directory")
+
+	p1 := filepath.Join(pwd, "test_dir")
+	r1 := util.PathExists(p1)
+	assert.Equal(t, false, r1, "the destination directory does not exist")
+
+	err = os.Mkdir(p1, os.ModeDir)
+	assert.Empty(t, err, "failed to create directory")
+
+	r2 := util.PathExists(p1)
+	assert.Equal(t, true, r2, "the distination directory dose exist")
+
+	os.RemoveAll(p1)
+}
 
 func TestAllocateDisk(t *testing.T) {
 	fn := "./xx1"
@@ -30,7 +46,7 @@ func TestAllocateDisk(t *testing.T) {
 	}
 
 	f.Close()
-	os.Remove(fn)
+	// os.Remove(fn)
 }
 
 func TestAllocateDiskOutOfSpace(t *testing.T) {
@@ -121,121 +137,9 @@ func TestCopy(t *testing.T) {
 		t.Log("task group:", g)
 	}
 
-	t.Log(strings.Repeat("=", 100))
-	err = util.ExecGroupCopyTasks(gct, 8096, 10)
-	if err != nil {
-		t.Logf("failed to execute copy task:\n  %v", err)
-	}
-}
-
-func TestCopyHalt(t *testing.T) {
-	const (
-		SRC  = "SRC"
-		DST  = "D:\\DST"
-		SRCF = "src_"
-		DSTF = "dst_"
-	)
-
-	_, err := os.Stat(SRC)
-	if err != nil {
-		if os.IsNotExist(err) {
-			os.MkdirAll(SRC, os.ModeDir)
-		} else {
-			t.Error(err)
-		}
-	}
-
-	matches, err := filepath.Glob(filepath.Join(SRC, "*"))
-	if err != nil {
-		t.Error(err)
-	}
-
-	if len(matches) == 0 {
-		for _, f := range matches {
-			err := os.RemoveAll(f)
-			if err != nil {
-				t.Logf("failed to remove file/directory [%s]: %v", f, err)
-			}
-		}
-	}
-
-	tasks := make([]*util.CopyTask, 0)
-
-	for i := 0; i < 10; i++ {
-		curF := filepath.Join(SRC, SRCF+strconv.Itoa(i))
-		df := filepath.Join(DST, DSTF+strconv.Itoa(i))
-
-		t := util.NewCopyTask(curF, df)
-		tasks = append(tasks, t)
-	}
-
-	err = util.SetupCopyTasks(tasks)
-	if err != nil {
-		t.Errorf("failed to setup task:\n  %v", err)
-		t.FailNow()
-	}
-
-	for _, xt := range tasks {
-		t.Log("task:", xt)
-	}
-	t.Log(strings.Repeat("=", 100))
-	gct := util.SplitTasksToNGroups(tasks, 1)
-	for _, g := range gct {
-		t.Log("task group:", g)
-	}
-
-	t.Log(strings.Repeat("=", 100))
-	err = util.ExecGroupCopyTasks(gct, 8096, 10)
-	if err != nil {
-		t.Logf("failed to execute copy task:\n  %v", err)
-	}
-}
-
-func TestTaskMonitor(t *testing.T) {
-	tm, err := util.NewTaskMonitor(10, 3)
-	if err != nil {
-		t.Error(err)
-	}
-
-	res := make(chan []util.TaskStateSummaryMsg)
-	tm.Register(res)
-	go tm.Run()
-
-	wg := new(sync.WaitGroup)
-	wg.Add(10)
-	for i := 0; i < 10; i++ {
-		go func(idx int) {
-			defer wg.Done()
-			st := 1 + rand.Intn(5)
-			time.Sleep(time.Duration(st) * time.Second)
-
-			ot := rand.Intn(10)
-			var tr bool
-			if ot <= 4 {
-				tr = false
-				err := tm.Send(util.TaskStateMsg{idx, false})
-				if err != nil {
-					t.Logf("%d send error: %v", idx, err)
-					return
-				}
-			} else {
-				tr = true
-				err := tm.Send(util.TaskStateMsg{idx, true})
-				if err != nil {
-					t.Logf("%d send error: %v", idx, err)
-					return
-				}
-			}
-
-			t.Logf("%d - %t\n", idx, tr)
-		}(i)
-	}
-
-	for r := range res {
-		_, _, rep := util.Report(r)
-		t.Logf("\n%s\n", rep)
-	}
-
-	// clean()
-	wg.Wait()
+	// t.Log(strings.Repeat("=", 100))
+	// err = util.ExecGroupCopyTasks(gct, 8096, 10)
+	// if err != nil {
+	// 	t.Logf("failed to execute copy task:\n  %v", err)
+	// }
 }

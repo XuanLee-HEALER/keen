@@ -6,6 +6,8 @@ import (
 )
 
 type BackupImage interface {
+	Meta() string
+	ToFCDMBackupImage() model.BackupResponse
 }
 
 type BackupApplication interface {

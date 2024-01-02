@@ -1,6 +1,6 @@
 package keen
 
-import "gitea.fcdm.top/lixuan/keen/ylog2"
+import "gitea.fcdm.top/lixuan/keen/ylog"
 
-var consoleWriter ylog2.ConsoleWriter = *ylog2.NewConsoleWriter(func(i int8) bool { return i >= ylog2.DEBUG }, true)
-var Log ylog2.Logger = ylog2.NewLogger(&consoleWriter)
+var consoleWriter ylog.ConsoleWriter = *ylog.NewConsoleWriter(func(i int8) bool { return i >= ylog.DEBUG }, true)
+var Log ylog.Logger = ylog.NewLogger(&consoleWriter)

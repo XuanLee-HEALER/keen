@@ -1,192 +1,181 @@
 package ylog
 
 import (
-	"bytes"
+	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
-	"gitea.fcdm.top/lixuan/keen/fsop"
 	"github.com/fatih/color"
 )
 
-type LogLevel uint8
-
 const (
-	Trace LogLevel = 0
-	Debug LogLevel = 1
-	Info  LogLevel = 2
-	Warn  LogLevel = 3
-	Error LogLevel = 4
-	TRACE          = "<TRACE>"
-	DEBUG          = "<DEBUG>"
-	INFO           = "<INFO> "
-	WARN           = "<WARN> "
-	ERROR          = "<ERROR>"
+	TRACE = iota
+	DEBUG
+	INFO
+	WARN
+	ERROR
+	FATAL
 )
 
-func parseLogLevel(l string) LogLevel {
+const (
+	LOG_TIME_FMT   = "2006-01-02 15:04:05"
+	LOG_MSG_FORMAT = "[%s] [%-5s] [%s:%d] - %s"
+)
+
+func parseLogLevel(l int) string {
 	switch l {
-	case "<TRACE>":
-		return Trace
-	case "<DEBUG>":
-		return Debug
-	case "<INFO>":
-		return Info
-	case "<WARN>":
-		return Warn
-	case "<ERROR>":
-		return Error
+	case TRACE:
+		return "TRACE"
+	case DEBUG:
+		return "DEBUG"
+	case INFO:
+		return "INFO"
+	case WARN:
+		return "WARN"
+	case ERROR:
+		return "ERROR"
+	case FATAL:
+		return "FATAL"
+	default:
+		return ""
 	}
-	return Trace
 }
 
-const (
-	LOG_FILE_DIR           = "C:\\ProgramData\\sqlpvd\\log"
-	LOG_EXPIRE             = 7 * 24 * 60 * 60 * time.Second
-	LOG_FILENAME_PREFIX    = "sqlpvd_"
-	LOG_FILENAME_TIMESTAMP = "20060102150405"
-	LOG_FLAG               = log.LstdFlags | log.Lshortfile
-	CONSOLE_LOG_LEVEL      = INFO
-	FILE_LOG_LEVEL         = TRACE
-)
+type LevelFilter = func(int8) bool
+type Archive = func(fn string) (bool, string)
 
-type YLogger struct {
-	ConsoleLevel    LogLevel
-	ConsoleColorful bool
-	FileLog         bool
-	FileLogDir      string
-	FileLevel       LogLevel
-	FileSuffix      string
-	FileClean       time.Duration
+type LogMessage struct {
+	level int8
+	msg   string
 }
 
-func (l YLogger) InitLogger() *log.Logger {
-	wrs := YLogWriter{}
-	writer1 := NewConsoleWriter(l.ConsoleLevel, l.ConsoleColorful)
-	wrs.console = writer1
-	if l.FileLog {
-		if l.FileLogDir == "" {
-			l.FileLogDir = LOG_FILE_DIR
-		}
-		if l.FileClean == 0 {
-			l.FileClean = LOG_EXPIRE
-		}
-		if l.FileSuffix == "" {
-			l.FileSuffix = "DEFAULT"
-		}
-		err := CleanOldFileLogs(l.FileLogDir, l.FileClean)
-		if err == nil {
-			writer2, err := NewFileWriter(l.FileLogDir, l.FileSuffix, l.FileLevel)
-			if err == nil {
-				wrs.file = writer2
-			}
-		}
-	}
-
-	return log.New(wrs, "", LOG_FLAG)
-}
-
-type YLogWriter struct {
-	console io.Writer
-	file    io.Writer
-}
-
-func (w YLogWriter) Write(p []byte) (n int, err error) {
-	if w.console != nil {
-		n, err := w.console.Write(p)
-		if err != nil {
-			return n, err
-		}
-	}
-	if w.file != nil {
-		n, err := w.file.Write(p)
-		if err != nil {
-			return n, err
-		}
-	}
-
-	return 0, nil
+type LogWriter interface {
+	msg(LogMessage)
+	enable(int8) bool
+	flush()
+	clean()
+	io.Writer
 }
 
 type ConsoleWriter struct {
-	out         io.Writer
-	level       LogLevel
-	enableColor bool
-	colorSet    map[LogLevel]*color.Color
+	levelFilter func(int8) bool
+	colored     bool
+	colors      []*color.Color
+	curMsg      LogMessage
+	ai          atomic.Bool
 }
 
-func (w ConsoleWriter) Write(p []byte) (n int, err error) {
-	if runtime.GOOS == "windows" {
-		p = bytes.Replace(p, []byte("\n"), []byte("\r\n"), -1)
-	}
-
-	segs := bytes.Split(p, []byte(" "))
-	level := parseLogLevel(string(segs[3]))
-	if level >= w.level {
-		if w.enableColor {
-			return w.out.Write([]byte(w.colorSet[level].Sprint(string(p))))
-		} else {
-			return w.out.Write(p)
+func NewConsoleWriter(level LevelFilter, colourful bool) *ConsoleWriter {
+	res := new(ConsoleWriter)
+	res.ai = atomic.Bool{}
+	res.levelFilter = level
+	if colourful {
+		traceC := color.New(color.FgCyan)
+		debugC := color.New(color.FgGreen)
+		infoC := color.New(color.FgWhite)
+		warnC := color.New(color.FgYellow)
+		errorC := color.New(color.FgRed)
+		fatalC := color.New(color.FgMagenta)
+		res.colored = colourful
+		res.colors = []*color.Color{traceC, debugC, infoC, warnC, errorC, fatalC}
+		for _, c := range res.colors {
+			c.EnableColor()
 		}
 	}
-
-	return 0, nil
+	return res
 }
 
-func NewConsoleWriter(level LogLevel, enableColor bool) ConsoleWriter {
-	colorSet := map[LogLevel]*color.Color{
-		Trace: color.New(color.FgHiWhite),
-		Debug: color.New(color.FgHiGreen),
-		Info:  color.New(color.FgBlue),
-		Warn:  color.New(color.FgYellow),
-		Error: color.New(color.FgRed),
+func (w *ConsoleWriter) msg(m LogMessage) {
+	for !w.ai.CompareAndSwap(false, true) {
 	}
-	return ConsoleWriter{
-		out:         os.Stdout,
-		level:       level,
-		enableColor: enableColor,
-		colorSet:    colorSet,
+	w.curMsg = m
+}
+
+func (w *ConsoleWriter) enable(l int8) bool {
+	return w.levelFilter(l)
+}
+
+func (w *ConsoleWriter) Write(bs []byte) (int, error) {
+	var (
+		n   int
+		err error
+	)
+	if w.colored {
+		n, err = w.colors[w.curMsg.level].Fprint(os.Stdout, string(bs))
+	} else {
+		n, err = os.Stdout.Write(bs)
+	}
+	w.ai.CompareAndSwap(true, false)
+	return n, err
+}
+
+func (w *ConsoleWriter) flush() {
+	os.Stdout.Sync()
+}
+
+func (w *ConsoleWriter) clean() {
+	if w.colored {
+		for _, c := range w.colors {
+			c.DisableColor()
+		}
 	}
 }
 
-func CleanOldFileLogs(dir string, expireTime time.Duration) error {
-	if !fsop.IsDir(dir) {
-		return nil
+type FileWriter struct {
+	logDir      string
+	file        *os.File
+	expire      time.Duration
+	archive     Archive
+	levelFilter LevelFilter
+}
+
+func DeleteExpiredLogAndArchive(logDir string, expire time.Duration, archive Archive) {
+	var (
+		isArc bool
+		arcMp map[string][]string = make(map[string][]string)
+	)
+
+	if archive != nil {
+		isArc = true
 	}
 
-	nt := time.Now()
-
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	n := time.Now()
+	st := n.Add(-expire)
+	absPath, _ := filepath.Abs(logDir)
+	infof("delete expired log files in [%s]: motification datetime <= %s\n", absPath, st.Format(LOG_TIME_FMT))
+	err := filepath.WalkDir(absPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		if dir == path {
+		if path == absPath {
 			return nil
 		}
 
 		if d.IsDir() {
-			return fs.SkipDir
+			return filepath.SkipDir
 		}
 
-		if strings.HasPrefix(d.Name(), LOG_FILENAME_PREFIX) {
-			sec := strings.Split(d.Name(), "_")
-			// parse时间的时区要设置成local，否则为UTC时间
-			t, err := time.ParseInLocation(LOG_FILENAME_TIMESTAMP, sec[1], time.Local)
+		fi, err := d.Info()
+		if err != nil {
+			return err
+		}
 
-			if err == nil {
-				elapse := nt.Sub(t)
-				if elapse >= expireTime {
-					err := os.Remove(path)
-					if err != nil {
-						return err
-					}
+		if expire != 0 && fi.ModTime().Before(st) {
+			err = os.Remove(path)
+			if err != nil {
+				errorf("failed to delete log file [%s]: %v\n", path, err)
+			}
+		} else {
+			if isArc {
+				if b, dst := archive(d.Name()); b {
+					arcMp[dst] = append(arcMp[dst], path)
 				}
 			}
 		}
@@ -195,49 +184,210 @@ func CleanOldFileLogs(dir string, expireTime time.Duration) error {
 	})
 
 	if err != nil {
-		return err
+		errorf("error occured while clean expired log files: %v\n", err)
 	}
 
-	return nil
-}
-
-type FileWriter struct {
-	f     *os.File
-	level LogLevel
-}
-
-func (w FileWriter) Write(p []byte) (n int, err error) {
-	if runtime.GOOS == "windows" {
-		p = bytes.Replace(p, []byte("\n"), []byte("\r\n"), -1)
-	}
-
-	segs := bytes.Split(p, []byte(" "))
-	level := parseLogLevel(string(segs[3]))
-	if level >= w.level {
-		return w.f.Write(p)
-	}
-
-	return 0, nil
-}
-
-func NewFileWriter(logDir string, suffix string, level LogLevel) (FileWriter, error) {
-	nowTimeStr := time.Now().Format(LOG_FILENAME_TIMESTAMP)
-	filename := filepath.Join(logDir, LOG_FILENAME_PREFIX+nowTimeStr+"_"+suffix+".log")
-
-	if !fsop.IsDir(logDir) {
-		err := os.MkdirAll(logDir, os.ModeDir)
+	for dir, fs := range arcMp {
+		ndir := filepath.Join(absPath, dir)
+		err := os.Mkdir(ndir, os.ModeDir)
 		if err != nil {
-			return FileWriter{}, err
+			if !os.IsExist(err) {
+				errorf("failed to create archive directory [%s]: %v\n", ndir, err)
+				continue
+			}
+		}
+
+		for _, f := range fs {
+			np := filepath.Join(ndir, filepath.Base(f))
+			err := os.Rename(f, np)
+			if err != nil {
+				errorf("failed to move the log file from [%s] to [%s]: %v\n", f, np, err)
+			}
 		}
 	}
 
-	f, err := os.Create(filename)
+}
+
+func NewFileWriter(logPath string, filename string, level LevelFilter, expire time.Duration, archive Archive) (*FileWriter, error) {
+	f := filepath.Join(logPath, filename)
+	absf, err := filepath.Abs(f)
 	if err != nil {
-		return FileWriter{}, err
+		return nil, err
 	}
 
-	return FileWriter{
-		f:     f,
-		level: level,
-	}, nil
+	pd := filepath.Dir(absf)
+	dir, err := os.Stat(pd)
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = os.MkdirAll(pd, os.ModeDir|700)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
+	}
+
+	if !dir.IsDir() {
+		return nil, fmt.Errorf("the path of log directory [%s] is existed and it is a file path", absf)
+	}
+
+	// check expired log and archive log
+	DeleteExpiredLogAndArchive(logPath, expire, archive)
+
+	fs, err := os.Create(absf)
+	if err != nil {
+		errorf("failed to create log file (%s): %v\n", f, err)
+		return nil, err
+	}
+
+	wr := new(FileWriter)
+	wr.logDir = logPath
+	wr.file = fs
+	wr.expire = expire
+	wr.archive = archive
+	wr.levelFilter = level
+	return wr, nil
+}
+
+func (w *FileWriter) msg(LogMessage) {}
+
+func (w *FileWriter) enable(l int8) bool {
+	return w.levelFilter(l)
+}
+
+func (w *FileWriter) flush() {
+	// golang对于文件写入不使用缓冲
+}
+
+func (w *FileWriter) Write(p []byte) (n int, err error) {
+	// write log
+	return w.file.Write(p)
+}
+
+func (w *FileWriter) clean() {
+	if err := w.file.Close(); err != nil {
+		errorf("failed to close the log file: %v\n", err)
+	}
+}
+
+type Logger struct {
+	writers []LogWriter
+}
+
+func NewLogger(writers ...LogWriter) Logger {
+	l := Logger{
+		writers: writers,
+	}
+
+	return l
+}
+
+func callInfo() (string, int) {
+	_, fn, ln, ok := runtime.Caller(3)
+	if !ok {
+		errorf("failed to retrieve caller information\n")
+	}
+	return fn, ln
+}
+
+func groupInfo(level int, msg string, args ...any) string {
+	t := time.Now()
+	ts := t.Format(LOG_TIME_FMT)
+	fn, ln := callInfo()
+	fn = SubPath(fn, 2)
+	l := parseLogLevel(level)
+	msg = fmt.Sprintf(LOG_MSG_FORMAT, ts, l, fn, ln, fmt.Sprintf(msg, args...))
+
+	if runtime.GOOS == "windows" {
+		msg += "\r\n"
+	} else {
+		msg += "\n"
+	}
+
+	return msg
+}
+
+func (log *Logger) log(msg LogMessage) {
+	for _, writer := range log.writers {
+		if writer.enable(msg.level) {
+			writer.msg(msg)
+			_, err := writer.Write([]byte(msg.msg))
+			if err != nil {
+				errorf("failed to write log: %v\n", err)
+			}
+			writer.flush()
+		}
+	}
+}
+
+func (log *Logger) Trace(msg string, args ...any) {
+	msg = groupInfo(TRACE, msg, args...)
+	log.log(LogMessage{TRACE, msg})
+}
+
+func (log *Logger) Debug(msg string, args ...any) {
+	msg = groupInfo(DEBUG, msg, args...)
+	log.log(LogMessage{DEBUG, msg})
+}
+
+func (log *Logger) Info(msg string, args ...any) {
+	msg = groupInfo(INFO, msg, args...)
+	log.log(LogMessage{INFO, msg})
+}
+
+func (log *Logger) Warn(msg string, args ...any) {
+	msg = groupInfo(WARN, msg, args...)
+	log.log(LogMessage{WARN, msg})
+}
+
+func (log *Logger) Error(msg string, args ...any) {
+	msg = groupInfo(ERROR, msg, args...)
+	log.log(LogMessage{ERROR, msg})
+}
+
+func (log *Logger) Fatal(msg string, args ...any) {
+	msg = groupInfo(FATAL, msg, args...)
+	log.log(LogMessage{FATAL, msg})
+	log.Clean()
+	os.Exit(1)
+}
+
+func (log *Logger) Clean() {
+	for _, w := range log.writers {
+		w.clean()
+	}
+}
+
+// SubPath 截取路径的后n级目录
+func SubPath(p string, n int) string {
+	pstck := make([]string, 0)
+
+	count := n
+	for count > 0 {
+		d, f := filepath.Split(p)
+		// t.Logf("dir: %s, file: %s", d, f)
+		pstck = append(pstck, f)
+		if d == "" || d == "/" {
+			break
+		}
+		d = d[:len(d)-1]
+
+		count--
+		p = d
+	}
+
+	for i, j := 0, len(pstck)-1; i < j; i, j = i+1, j-1 {
+		pstck[i], pstck[j] = pstck[j], pstck[i]
+	}
+
+	return strings.Join(pstck, string(os.PathSeparator))
+}
+
+func infof(fmtStr string, args ...any) {
+	fmt.Fprintf(os.Stdout, fmtStr, args...)
+}
+
+func errorf(fmtStr string, args ...any) {
+	fmt.Fprintf(os.Stderr, fmtStr, args...)
 }

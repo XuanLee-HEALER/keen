@@ -7,6 +7,7 @@ import (
 
 	"gitea.fcdm.top/lixuan/keen/pvd"
 	"github.com/cnyjp/fcdmpublic/model"
+	"github.com/stretchr/testify/assert"
 )
 
 func sampleEnv() {
@@ -100,5 +101,46 @@ func TestGetCompatConfig(t *testing.T) {
 	if v != "" {
 		t.FailNow()
 	}
+}
 
+func TestLangPackageAndNation(t *testing.T) {
+	lp := pvd.NewLangPackage()
+
+	n1 := pvd.Nation{
+		1, "zh",
+	}
+	n2 := pvd.Nation{
+		2, "en",
+	}
+
+	r1 := lp.NationExist(n1)
+	assert.Equal(t, false, r1, "empty package should not contain nation information")
+
+	e1 := lp.AddNation(n1)
+	e2 := lp.AddNation(n2)
+	assert.Empty(t, e1, "error occured while add nation")
+	assert.Empty(t, e2, "error occured while add nation")
+}
+
+func TestLangPackageAndDisplay(t *testing.T) {
+	lp := pvd.NewLangPackage()
+
+	n1 := pvd.Nation{1, "zh"}
+	n2 := pvd.Nation{3, "du"}
+
+	e1 := lp.AddNation(n1)
+	assert.Empty(t, e1, "error occured while add nation")
+
+	lp.AddDisplay(n1, "test name", "测试名称", "测试描述", nil)
+	e3 := lp.AddDisplay(n2, "test name", "dd x", "dd d", nil)
+	assert.Error(t, e3, "nation information does not exist")
+
+	conf := model.ConfigConfig{
+		Name:    "test name",
+		Options: map[string]string{},
+	}
+
+	lp.ApplyMultiLingual(n1, &conf)
+
+	assert.Equal(t, "测试名称", conf.I18n["zh"].Name, "failed to set chinese name")
 }

@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"strings"
 
-	"gitea.fcdm.top/lixuan/keen/datastructure"
 	"gitea.fcdm.top/lixuan/keen/fp"
+	xgods "github.com/XuanLee-HEALER/gods-keqing"
 	"github.com/go-ole/go-ole"
 	"github.com/go-ole/go-ole/oleutil"
 	"golang.org/x/sys/windows/registry"
@@ -772,7 +772,7 @@ func DriveLetters() ([]DriverInfo, error) {
 }
 
 // AvailableLetter 查找可用盘符
-func AvailableLetter(usedDrivers datastructure.Set[byte]) byte {
+func AvailableLetter(usedDrivers xgods.Set[byte]) byte {
 	for l := 'D'; l <= 'Z'; l++ {
 		if _, ok := usedDrivers[byte(l)]; !ok {
 			return byte(l)

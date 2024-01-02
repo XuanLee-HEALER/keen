@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"gitea.fcdm.top/lixuan/keen/datastructure"
 	"gitea.fcdm.top/lixuan/keen/util"
+	xgods "github.com/XuanLee-HEALER/gods-keqing"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -168,7 +168,7 @@ func TestDriveLetters(t *testing.T) {
 
 	print(drivers, t)
 
-	driverSet := make(datastructure.Set[byte])
+	driverSet := make(xgods.Set[byte])
 	for _, driver := range drivers {
 		if len(driver.Name) <= 1 {
 			driverSet.Add(driver.Name[0])

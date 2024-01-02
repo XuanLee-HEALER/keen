@@ -14,8 +14,8 @@ import (
 	"syscall"
 
 	"gitea.fcdm.top/lixuan/keen"
-	"gitea.fcdm.top/lixuan/keen/datastructure"
 	"gitea.fcdm.top/lixuan/keen/ylog"
+	xgods "github.com/XuanLee-HEALER/gods-keqing"
 )
 
 func Sync(_ string) {
@@ -124,7 +124,7 @@ func QuerySystemMemory() ([]*MemSeg, error) {
 		return MemSeg{ly, s, e, segs[1], nil}
 	}
 
-	merge := func(l int, sck *datastructure.Stack) int {
+	merge := func(l int, sck *xgods.Stack) int {
 		curl := sck.Peek().(*MemSeg).Layer
 		for curl > l {
 			tarr := make([]MemSeg, 0)
@@ -149,7 +149,7 @@ func QuerySystemMemory() ([]*MemSeg, error) {
 	}
 
 	res := make([]*MemSeg, 0)
-	sck := datastructure.NewStack()
+	sck := xgods.NewStack()
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		ln := scanner.Text()
