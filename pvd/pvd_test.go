@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+	"time"
 
 	"gitea.fcdm.top/lixuan/keen/pvd"
+	"gitea.fcdm.top/lixuan/keen/util"
 	"github.com/cnyjp/fcdmpublic/model"
 	"github.com/stretchr/testify/assert"
 )
@@ -118,8 +120,8 @@ func TestLangPackageAndNation(t *testing.T) {
 
 	e1 := lp.AddNation(n1)
 	e2 := lp.AddNation(n2)
-	assert.Empty(t, e1, "error occured while add nation")
-	assert.Empty(t, e2, "error occured while add nation")
+	assert.Empty(t, e1, "error occurred while add nation")
+	assert.Empty(t, e2, "error occurred while add nation")
 }
 
 func TestLangPackageAndDisplay(t *testing.T) {
@@ -129,7 +131,7 @@ func TestLangPackageAndDisplay(t *testing.T) {
 	n2 := pvd.Nation{3, "du"}
 
 	e1 := lp.AddNation(n1)
-	assert.Empty(t, e1, "error occured while add nation")
+	assert.Empty(t, e1, "error occurred while add nation")
 
 	lp.AddDisplay(n1, "test name", "测试名称", "测试描述", nil)
 	e3 := lp.AddDisplay(n2, "test name", "dd x", "dd d", nil)
@@ -143,4 +145,18 @@ func TestLangPackageAndDisplay(t *testing.T) {
 	lp.ApplyMultiLingual(n1, &conf)
 
 	assert.Equal(t, "测试名称", conf.I18n["zh"].Name, "failed to set chinese name")
+}
+
+func TestLogName(t *testing.T) {
+	n1 := pvd.GenLogName("backup", "a457dbc1-5115-d562-ca36-4b16e8b155e6")
+	ts := util.LocalFormat(util.SERIAL_FMT, time.Now())
+
+	assert.Equal(t, "backup_a457dbc1-5115-d562-ca36-4b16e8b155e6_"+ts+".log", n1, "failed to generate proper name of log file")
+
+	b := pvd.LogNameReg.MatchString(n1)
+	assert.True(t, b, "failed to match name of log file")
+
+	r1, r2 := pvd.SimpleArch(n1)
+	assert.True(t, r1, "failed to match name of log file")
+	assert.Equal(t, "backup", r2, "failed to find the pattern of submatch")
 }

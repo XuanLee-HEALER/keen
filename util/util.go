@@ -10,25 +10,20 @@ import (
 	"io/fs"
 	"math"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
+	"gitea.fcdm.top/lixuan/keen"
 	"gitea.fcdm.top/lixuan/keen/fp"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
 
-type CleanFunc func()
-
 var TrimSpace = func(r rune) bool { return r == ' ' || r == '\t' }
-
-// ExitWith 以状态码{code}退出程序，执行{clean}函数
-func ExitWith(code int, clean CleanFunc) {
-	clean()
-	os.Exit(code)
-}
 
 // ReadListOutput 读取Format-list输出内容，返回数组的第一个元素为header
 func ReadListOutput(bs []byte) []map[string]string {
@@ -419,4 +414,102 @@ func (eg *ErrGroup) Error() string {
 		sb.WriteString(fmt.Sprintf("err_idx(%d) - err(%v)\n", i, e))
 	}
 	return sb.String()
+}
+
+// ExecCmd 执行命令，返回顺序为标准输出、标准错误和执行错误对象
+func ExecCmd(path string,
+	args []string,
+	envs map[string]string,
+	dir string,
+	uid uint32,
+	gid uint32,
+	stats []string) ([]byte, []byte, error) {
+	path, err := exec.LookPath(path)
+	if err != nil {
+		keen.Log.Error("failed to find the absolute path of executable: %v", err)
+		return nil, nil, err
+	}
+
+	if args == nil {
+		args = []string{path}
+	} else {
+		args = append([]string{path}, args...)
+	}
+
+	envstrs := make([]string, 0)
+	for k, v := range envs {
+		envstrs = append(envstrs, k+"="+v)
+	}
+
+	cmd := exec.Cmd{
+		Path: path,
+		Args: args,
+		Dir:  dir,
+		Env:  envstrs,
+		SysProcAttr: &syscall.SysProcAttr{
+			Credential: &syscall.Credential{
+				Uid: uid,
+				Gid: gid,
+			},
+			Setpgid: true,
+		},
+	}
+
+	keen.Log.Debug("execute command:\n\t%s", cmd.String())
+	keen.Log.Debug("argument list:\n\t%v", cmd.Args[1:])
+	keen.Log.Debug("local environment variables:\n\t%v", cmd.Env)
+	keen.Log.Debug("uid: %d\tgid: %d", uid, gid)
+
+	outp, err := cmd.StdoutPipe()
+	if err != nil {
+		keen.Log.Error("failed to get stdoutpipe: %v", err)
+		return nil, nil, err
+	}
+	oute, err := cmd.StderrPipe()
+	if err != nil {
+		keen.Log.Error("failed to get stderrpipe: %v", err)
+		return nil, nil, err
+	}
+	in, err := cmd.StdinPipe()
+	if err != nil {
+		keen.Log.Error("failed to get stdinpipe: %v", err)
+		return nil, nil, err
+	}
+
+	go func() {
+		defer in.Close()
+		for _, stat := range stats {
+			keen.Log.Debug("write [%s] into stdinpipe", stat)
+			_, err := io.WriteString(in, stat+"\n")
+			if err != nil {
+				keen.Log.Error("error occurred when write statement: %v", err)
+			}
+		}
+	}()
+
+	errg := NewErrGroup()
+
+	if err := cmd.Start(); err != nil {
+		keen.Log.Error("failed to start the command: %v", err)
+		return nil, nil, err
+	}
+
+	outbs, err := io.ReadAll(outp)
+	if err != nil {
+		keen.Log.Error("failed read from stdoutpipe: %v", err)
+		errg.AddErrs(err)
+	}
+
+	errbs, err := io.ReadAll(oute)
+	if err != nil {
+		keen.Log.Error("failed read from stderrpipe: %v", err)
+		errg.AddErrs(err)
+	}
+
+	if err := cmd.Wait(); err != nil {
+		keen.Log.Error("error occurred while waiting the command execute completely: %v", err)
+		return nil, nil, err
+	}
+
+	return outbs, errbs, errg.Err()
 }

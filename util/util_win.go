@@ -1,5 +1,4 @@
 //go:build windows
-// +build windows
 
 package util
 
@@ -16,8 +15,6 @@ import (
 
 	"gitea.fcdm.top/lixuan/keen/fp"
 	xgods "github.com/XuanLee-HEALER/gods-keqing"
-	"github.com/go-ole/go-ole"
-	"github.com/go-ole/go-ole/oleutil"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -792,47 +789,4 @@ func StartService(sname string) ([]byte, error) {
 func StopService(sname string) ([]byte, error) {
 	STOP_SVC_SCRIPT := `& {chcp 437 > $null; Stop-Service -Name "%s"}`
 	return PSExec(fmt.Sprintf(STOP_SVC_SCRIPT, sname))
-}
-
-func Xt() {
-	ole.CoInitialize(0)
-	defer ole.CoUninitialize()
-
-	unknown, _ := oleutil.CreateObject("WbemScripting.SWbemLocator")
-	defer unknown.Release()
-
-	wmi, _ := unknown.QueryInterface(ole.IID_IDispatch)
-	defer wmi.Release()
-
-	serviceRaw, _ := oleutil.CallMethod(wmi, "ConnectServer")
-	defer serviceRaw.Clear()
-
-	service := serviceRaw.ToIDispatch()
-	defer service.Release()
-
-	queryRaw := "SELECT * FROM Win32_OperatingSystem"
-	query, _ := oleutil.CallMethod(service, "ExecQuery", queryRaw)
-	defer query.Clear()
-
-	resultRaw, _ := oleutil.CallMethod(query.ToIDispatch(), "Next")
-	defer resultRaw.Clear()
-
-	if resultRaw.Value() == nil {
-		fmt.Println("No data returned.")
-		return
-	}
-
-	result := resultRaw.ToIDispatch()
-	defer result.Release()
-
-	osNameRaw, _ := oleutil.GetProperty(result, "Caption")
-	osName := osNameRaw.ToString()
-	defer osNameRaw.Clear()
-
-	osVersionRaw, _ := oleutil.GetProperty(result, "Version")
-	osVersion := osVersionRaw.ToString()
-	defer osVersionRaw.Clear()
-
-	fmt.Printf("操作系统名称: %s\n", osName)
-	fmt.Printf("操作系统版本: %s\n", osVersion)
 }

@@ -62,6 +62,29 @@ func NewFCDMArgument() FCDMArgument {
 	}
 }
 
+// MapCommand 文件日志名称中命令的对应名称
+func (arg FCDMArgument) MapCommand() string {
+	switch arg.Command {
+	case model.CMD_DISCOVER:
+		return "discover"
+	case model.CMD_APPLICATION_INFO:
+		return "refresh"
+	case model.CMD_BACKUP:
+		return "backup"
+	case model.CMD_MOUNT:
+		return "mount"
+	case model.CMD_UMOUNT:
+		return "umount"
+	case model.CMD_RESTORE:
+		return "restore"
+	case model.CMD_PLUGIN_INFO:
+		return "pluginfo"
+	default:
+		return "illegal"
+	}
+}
+
+// IsLegal 判断命令是否有效
 func (arg FCDMArgument) IsLegal() bool {
 	return arg.Command == model.CMD_DISCOVER ||
 		arg.Command == model.CMD_APPLICATION_INFO ||

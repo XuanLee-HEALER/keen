@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"gitea.fcdm.top/lixuan/keen/util"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestIterDir(t *testing.T) {
@@ -111,4 +112,12 @@ func TestMinMaxIntInvalidInput(t *testing.T) {
 	if ok {
 		t.Error(errors.New("invalid input"))
 	}
+}
+
+func TestExecCmd(t *testing.T) {
+	out, errm, err := util.ExecCmd("echo", nil, map[string]string{"ORACLE_SID": "xxx"}, "", 0, 0, []string{"test", "echo", "hello", "byebye"})
+
+	assert.Nil(t, err, "failed to execute command")
+	t.Log("out: ", string(out))
+	t.Log("err out: ", string(errm))
 }

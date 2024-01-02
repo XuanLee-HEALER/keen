@@ -148,7 +148,7 @@ func DeleteExpiredLogAndArchive(logDir string, expire time.Duration, archive Arc
 	n := time.Now()
 	st := n.Add(-expire)
 	absPath, _ := filepath.Abs(logDir)
-	infof("delete expired log files in [%s]: motification datetime <= %s\n", absPath, st.Format(LOG_TIME_FMT))
+	Infof("delete expired log files in [%s]: motification datetime <= %s\n", absPath, st.Format(LOG_TIME_FMT))
 	err := filepath.WalkDir(absPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -170,7 +170,7 @@ func DeleteExpiredLogAndArchive(logDir string, expire time.Duration, archive Arc
 		if expire != 0 && fi.ModTime().Before(st) {
 			err = os.Remove(path)
 			if err != nil {
-				errorf("failed to delete log file [%s]: %v\n", path, err)
+				Errorf("failed to delete log file [%s]: %v\n", path, err)
 			}
 		} else {
 			if isArc {
@@ -184,7 +184,7 @@ func DeleteExpiredLogAndArchive(logDir string, expire time.Duration, archive Arc
 	})
 
 	if err != nil {
-		errorf("error occured while clean expired log files: %v\n", err)
+		Errorf("error occurred while clean expired log files: %v\n", err)
 	}
 
 	for dir, fs := range arcMp {
@@ -192,7 +192,7 @@ func DeleteExpiredLogAndArchive(logDir string, expire time.Duration, archive Arc
 		err := os.Mkdir(ndir, os.ModeDir)
 		if err != nil {
 			if !os.IsExist(err) {
-				errorf("failed to create archive directory [%s]: %v\n", ndir, err)
+				Errorf("failed to create archive directory [%s]: %v\n", ndir, err)
 				continue
 			}
 		}
@@ -201,11 +201,10 @@ func DeleteExpiredLogAndArchive(logDir string, expire time.Duration, archive Arc
 			np := filepath.Join(ndir, filepath.Base(f))
 			err := os.Rename(f, np)
 			if err != nil {
-				errorf("failed to move the log file from [%s] to [%s]: %v\n", f, np, err)
+				Errorf("failed to move the log file from [%s] to [%s]: %v\n", f, np, err)
 			}
 		}
 	}
-
 }
 
 func NewFileWriter(logPath string, filename string, level LevelFilter, expire time.Duration, archive Archive) (*FileWriter, error) {
@@ -237,7 +236,6 @@ func NewFileWriter(logPath string, filename string, level LevelFilter, expire ti
 
 	fs, err := os.Create(absf)
 	if err != nil {
-		errorf("failed to create log file (%s): %v\n", f, err)
 		return nil, err
 	}
 
@@ -267,7 +265,7 @@ func (w *FileWriter) Write(p []byte) (n int, err error) {
 
 func (w *FileWriter) clean() {
 	if err := w.file.Close(); err != nil {
-		errorf("failed to close the log file: %v\n", err)
+		Errorf("failed to close the log file: %v\n", err)
 	}
 }
 
@@ -286,7 +284,7 @@ func NewLogger(writers ...LogWriter) Logger {
 func callInfo() (string, int) {
 	_, fn, ln, ok := runtime.Caller(3)
 	if !ok {
-		errorf("failed to retrieve caller information\n")
+		Errorf("failed to retrieve caller information\n")
 	}
 	return fn, ln
 }
@@ -314,7 +312,7 @@ func (log *Logger) log(msg LogMessage) {
 			writer.msg(msg)
 			_, err := writer.Write([]byte(msg.msg))
 			if err != nil {
-				errorf("failed to write log: %v\n", err)
+				Errorf("failed to write log: %v\n", err)
 			}
 			writer.flush()
 		}
@@ -384,10 +382,10 @@ func SubPath(p string, n int) string {
 	return strings.Join(pstck, string(os.PathSeparator))
 }
 
-func infof(fmtStr string, args ...any) {
+func Infof(fmtStr string, args ...any) {
 	fmt.Fprintf(os.Stdout, fmtStr, args...)
 }
 
-func errorf(fmtStr string, args ...any) {
+func Errorf(fmtStr string, args ...any) {
 	fmt.Fprintf(os.Stderr, fmtStr, args...)
 }
