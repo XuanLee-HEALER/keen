@@ -9,6 +9,11 @@ import (
 	"github.com/cnyjp/fcdmpublic/model"
 )
 
+var (
+	Zh = Nation{ID: 0x0, Name: "zh_CN"}
+	En = Nation{ID: 0x1, Name: "en_US"}
+)
+
 type Nation struct {
 	ID   uint8
 	Name string

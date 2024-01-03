@@ -16,6 +16,10 @@ import (
 	"github.com/cnyjp/fcdmpublic/model"
 )
 
+const (
+	C_ERR_EXIT = 1
+)
+
 var LogNameReg = regexp.MustCompile(`(backup|restore|mount|umount|discover|refresh|illegal|pluginfo)_(.+)_(\d{14})\.log$`)
 
 var SimpleArch ylog.Archive = func(fn string) (bool, string) {
