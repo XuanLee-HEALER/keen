@@ -104,7 +104,7 @@ func PSVersionTable() (PSVersion, error) {
 	case '7':
 		return PSv7, nil
 	default:
-		return PSv1, errors.New("illegal powershell version")
+		return PSv1, ErrUnsupportedPSVersion
 	}
 }
 

@@ -1,10 +1,13 @@
-//go:build linux && unix && aix
+//go:build linux || darwin || aix
+// +build linux darwin aix
 
 package util_test
 
 import (
 	"os"
 	"testing"
+
+	"gitea.fcdm.top/lixuan/keen/util"
 )
 
 func TestAllocateDisk(t *testing.T) {

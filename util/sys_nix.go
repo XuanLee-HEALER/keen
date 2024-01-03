@@ -1,4 +1,5 @@
-//go:build linux && unix && aix
+//go:build linux || aix || darwin
+// +build linux aix darwin
 
 package util
 

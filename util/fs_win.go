@@ -1,4 +1,5 @@
 //go:build windows
+// +build windows
 
 package util
 
@@ -21,7 +22,7 @@ func AllocateDisk(filePath string, size FileSize) (*os.File, error) {
 	}
 
 	// 设置文件大小
-	if err := syscall.Ftruncate(syscall.Handle(f.Fd()), int64(size)); err != nil {
+	if err := syscall.Ftruncate(int(f.Fd()), int64(size)); err != nil {
 		defer func() {
 			f.Close()
 			os.Remove(filePath)
